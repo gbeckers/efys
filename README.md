@@ -9,7 +9,6 @@ Efys depends on the following Python libraries:
 
 * darr
 * matplotlib
-* mne
 * numpy
 * pandas
 * pyedflib
