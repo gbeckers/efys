@@ -1,4 +1,6 @@
+import numpy as np
 import pandas as pd
+import uts
 
 __all__ = ['load_thinkpulsedata']
 
@@ -21,3 +23,36 @@ def load_thinkpulsedata(filepath):
         df[colname] = df[colname].apply(hexstrtomicrovolt)
     df['sampleindex'] = df['sampleindex'].apply(lambda s: int(s, 16))
     return df
+
+#TODO improve reading header by regexp
+# other channels, Analog and accel
+def load_openbcidata(filepath, fs=250):
+    # % OpenBCI Raw EEG Data
+    # % Number of channels = 8
+    # % Sample Rate = 250 Hz
+    # % Board = OpenBCI_GUI$BoardCytonSerial
+    with open(filepath, 'r') as f:
+        header = [f.readline() for i in range(4)]
+    nchannels = int(header[1].split('=')[-1])
+    fs = float(header[2].split('=')[-1][:-3])
+    df = pd.read_csv(filepath, header=4, delimiter=',')
+    eegchannels = [f' EXG Channel {i}' for i in range(nchannels)]
+    eegsamples = df[eegchannels].to_numpy()
+    eegchannelnames = [f'eeg{i:02d}' for i in range(nchannels)]
+    otherchannels = [c for c in df.columns if "Other" in c]
+    othersamples = df[otherchannels].to_numpy()
+    otherchannelnames = [f'other{i:02d}' for i in range(len(otherchannels))]
+    accelchannels = [' Accel Channel 0', ' Accel Channel 1', ' Accel Channel 2']
+    accelsamples = df[accelchannels].to_numpy()
+    accelchannelnames = ['accel0', 'accel1', 'accel2']
+    analogchannels = [c for c in df.columns if "Analog" in c]
+    analogsamples = df[analogchannels].to_numpy()
+    analogchannelnames = [f'analog{i}' for i in range(len(analogchannels))]
+    ts = df.iloc[0][' Timestamp (Formatted)']
+    startdatetime = np.datetime64(ts[1:].replace(' ', 'T'))
+    samples = np.concatenate([eegsamples, othersamples, accelsamples, analogsamples], axis=1)
+    channelnames = eegchannelnames + otherchannelnames + accelchannelnames + analogchannelnames
+    s = uts.MultiChannelUniformTimeSeries(samples,
+                                          fs=fs, channelnames=channelnames,
+                                          startdatetime=startdatetime)
+    return s

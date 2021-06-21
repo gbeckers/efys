@@ -1,3 +1,7 @@
+from . import edf
+from . import audiocalibmarks
+from . import openbci
+
 
 from ._version import get_versions
 __version__ = get_versions()['version']

@@ -1,6 +1,8 @@
 import numpy as np
 import pyedflib
 
+__all__ = ['read_edfinfo', 'load_edfasumcts']
+
 def read_edfinfo(filepath):
     with pyedflib.EdfReader(str(filepath)) as f:
         return {
@@ -25,7 +27,10 @@ def read_edfinfo(filepath):
         }
 
 
-def loadedfasumcts(edffilepath, dtype='float32', channels=None, nanchannels=None,
+# TODO split into function that produces a generator of samples, and a separate
+#  one that saves it as umcts
+
+def load_edfasumcts(edffilepath, dtype='float32', channels=None, nanchannels=None,
                    geometry=None, digital=False):
     """Reads a edf/bdf file and returns it as a uts MultiChannelUniformTimeSeries.
 
@@ -81,3 +86,6 @@ def loadedfasumcts(edffilepath, dtype='float32', channels=None, nanchannels=None
                                           geometry=geometry, startdatetime=startdatetime, dtype=dtype,
                                           channelaxis=1, metadata=metadata)
     return s
+
+
+
