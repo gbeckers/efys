@@ -14,19 +14,23 @@ def hexstrtomicrovolt(hexstr, minV=-4.5, maxV=4.5, gain=8):
     value *= (maxV - minV) / (16.777216 * gain) # 16.777216 = 2**24 / 1e6
     return value
 
-def load_thinkpulsedata(filepath):
-    df = pd.read_csv(filepath, skiprows=2,
-                     names=['sampleindex','channel_00','channel_01','channel_02','channel_03','channel_04',
-                           'channel_05','channel_06','channel_07','accel_0','accel_1','accel_2'])
+def load_thinkpulsedata(filepath, fs=250., startdatetime='NaT'):
+    columnnames =  ['sampleindex','channel_00','channel_01','channel_02','channel_03','channel_04',
+                           'channel_05','channel_06','channel_07','accel_0','accel_1','accel_2']
+    dtype = {cn: str for cn in columnnames}
+    df = pd.read_csv(filepath, skiprows=2, names=columnnames, dtype=dtype)
     for colname in ('channel_00','channel_01','channel_02','channel_03','channel_04',
                     'channel_05','channel_06','channel_07','accel_0','accel_1','accel_2'):
         df[colname] = df[colname].apply(hexstrtomicrovolt)
     df['sampleindex'] = df['sampleindex'].apply(lambda s: int(s, 16))
-    return df
+    s = uts.MultiChannelUniformTimeSeries(df.to_numpy(),
+                                          fs=float(fs), channelnames=columnnames,
+                                          startdatetime=startdatetime)
+    return s
 
 #TODO improve reading header by regexp
 # other channels, Analog and accel
-def load_openbcidata(filepath, fs=250):
+def load_openbcidata(filepath):
     # % OpenBCI Raw EEG Data
     # % Number of channels = 8
     # % Sample Rate = 250 Hz

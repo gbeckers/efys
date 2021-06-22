@@ -198,16 +198,23 @@ def create_recordingstimulusinfoopenbci(datafilepath, playbackstimulustablepath,
 
     """
     overwrite = True
-    audiochannel = 'other03'
+    datafilepath = Path(datafilepath)
+    with open(datafilepath, 'r') as f:
+        firstline = f.readline()
+        if "OpenBCI Raw EEG Data" in firstline:
+            loaddata = openbci.load_openbcidata
+            audiochannel = 'other03'
+        else:
+            loaddata = openbci.load_thinkpulsedata
+            audiochannel = 'accel_1'
     recordedasbit = True
     checkcalibmarks = True
-    datafilepath = Path(datafilepath)
     if outputpath is None:
         outputpath = datafilepath.with_name(f"{datafilepath.with_suffix('').name}_stimulusinfo")
     else:
         outputpath = Path(outputpath)
     pst = pd.read_csv(playbackstimulustablepath)
-    bitsnd = openbci.load_openbcidata(filepath=datafilepath)[:,audiochannel]
+    bitsnd = loaddata(filepath=datafilepath)[:,audiochannel]
     fs, data = wavfile.read(filename=str(playbackwavpath))
     playbacksnd = uts.UniformTimeSeries(samples=data, fs=float(fs))
     st, params, (fig1, fig2) = create_recordingstimulustable(recordedsnd=bitsnd,
