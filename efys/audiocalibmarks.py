@@ -89,6 +89,7 @@ def create_recordingstimulustable(recordedsnd, playbackstimulustable, playbacksn
     if checkcalibmarks:
         cmdur = st.iloc[0]['endtime'] - st.iloc[0]['starttime']
         margin = int(round(cmdur*0.05*recordedsnd.fs))
+        margin = min(margin, recordedsnd.ntimesamples-st.iloc[-1]['endframe'])
         detaildur = cmdur / 5
         detaillen = int(round(detaildur*recordedsnd.fs))
         detailmargin = detaillen // 10
