@@ -10,8 +10,6 @@ from . import mcsh5
 from efys.filtering import create_lplfp, create_bplfp, create_amua, create_esa
 from efys.stimuli import Stimuli
 
-
-
 class Experiment:
 
     """A directory that has subdirectories that represent recording sessions
@@ -164,13 +162,8 @@ class RecordingSession:
 
 class Recording:
 
-    _FILTEREDRECORDINGDIRNAME = 'filtered'
-    _STIMULIDIRNAME = 'stimuli'
-    _FIGUREDIRNAME = 'figures'
-    _LPLFPNAME = 'lplfp.darr'
-    _BPLFPNAME = 'bplfp.darr'
-    _AMUANAME = 'amua.darr'
-    _ESANAME = 'esa.darr'
+    _filteredrecordingdirname = 'filtered'
+    _rawrelpath = None # to be defined by sublass, relative to `path`, can be done in init
 
     def __init__(self, path):
         self._path = Path(path)
@@ -178,27 +171,10 @@ class Recording:
             raise IOError(f'"{path}" does not exist')
         self._name = self._path.name
         self._datadir = darr.DataDir(self._path)
-
-        h5files = [f for f in self._path.glob('*.h5')]
-        if not len(h5files) == 1:
-            raise ValueError(f"There should be a single h5 file in this folder ({path}),"
-                             f"but this is not the case ({h5files})")
-        self._rawpath = h5files[0]
-        self._stimulipath = self._path / self._STIMULIDIRNAME
-        if self._stimulipath.exists():
-            self._stimuli = Stimuli(self._stimulipath)
-        else:
-            self._stimuli = None
-        self._filteredpath = self._path / self._FILTEREDRECORDINGDIRNAME
+        self._filteredpath = self._path / self._filteredrecordingdirname
         if not self._filteredpath.exists():
             self._filteredpath.mkdir()
-        self._amuapath = self._filteredpath / self._AMUANAME
-        self._lplfppath = self._filteredpath / self._LPLFPNAME
-        self._bplfppath = self._filteredpath / self._BPLFPNAME
-        self._esapath = self._filteredpath / self._ESANAME
-        self._figurepath = self._path / self._FIGUREDIRNAME
-        if not self._figurepath.exists():
-            self._figurepath.mkdir()
+
 
     @property
     def path(self):
@@ -210,11 +186,124 @@ class Recording:
 
     @property
     def rawpath(self):
-        return self._rawpath
+        return self.path / self._rawrelpath
 
     @property
     def filteredpath(self):
         return self._filteredpath
+
+    # to be implemented by subclass
+    @contextmanager
+    def open_raw(self):
+        yield None
+
+    # to be implemented by subclass
+    def load_raw(self):
+        return None
+
+    # to be implemented by subclass
+    @contextmanager
+    def open_bitsnd(self):
+        yield None
+
+    # to be implemented by subclass
+    def load_bitsnd(self):
+        return None
+
+    def create_lplfp(self, freq=100., width=50., kernelduration=0.05,
+                 window="kaiser", mode='same', dtype=np.float32, newfs=1000.,
+                 reportprogress=True, chunksize=1024 * 75,
+                 threads=None, overwrite=False):
+        sname = f'lplfp_{int(freq)}_{int(width)}_{int(1000*kernelduration)}.darr'
+        with self.open_raw() as raw:
+            lfp = create_lplfp(raw, self.filteredpath / sname,
+                               threads=threads, reportprogress=reportprogress,
+                               freq=freq, width=width, kernelduration=kernelduration,
+                               window=window, mode=mode, dtype=dtype, newfs=newfs,
+                               chunksize=chunksize, overwrite=overwrite)
+        return lfp
+
+    def create_bplfp(self, threads=None, reportprogress=True, overwrite=False):
+        with self.open_raw() as raw:
+            lfp = create_bplfp(raw, self.filteredpath / 'bplfp.darr',
+                               threads=threads, reportprogress=reportprogress,
+                               overwrite=overwrite)
+        return lfp
+
+    def create_esa(self, threads=None, reportprogress=True, overwrite=False):
+        with self.open_raw() as raw:
+            esa = create_esa(raw, self.filteredpath / 'esa.darr',
+                               threads=threads, reportprogress=reportprogress,
+                               overwrite=overwrite)
+        return esa
+
+    def create_amua(self, threads=None, reportprogress=True, overwrite=False):
+        with self.open_raw() as raw:
+            amua = create_amua(raw, self.filteredpath / 'amua.darr',
+                               threads=threads, reportprogress=reportprogress,
+                               overwrite=overwrite)
+        return amua
+
+class RecordingPMM2015(Recording):
+
+    _rawrelpath = 'recording.darr'  # to be defined by sublass, relative to `path`, can be done in init
+    _bitsndpath = 'sound.darr'
+
+    @property
+    def bitsndpath(self):
+        return self._bitsndpath
+
+    # to be implemented by subclass
+    @contextmanager
+    def open_raw(self):
+        yield uts.opendarr(self.rawpath)
+    # to be implemented by subclass
+    def load_raw(self):
+        return uts.load(self.rawpath)
+
+    # to be implemented by subclass
+    @contextmanager
+    def open_bitsnd(self):
+        yield None
+
+    # to be implemented by subclass
+    def load_bitsnd(self):
+        return None
+
+
+class RecordingSL2020(Recording):
+
+
+    _STIMULIDIRNAME = 'stimuli'
+    _FIGUREDIRNAME = 'figures'
+    _LPLFPNAME = 'lplfp.darr'
+    _BPLFPNAME = 'bplfp.darr'
+    _AMUANAME = 'amua.darr'
+    _ESANAME = 'esa.darr'
+
+    def __init__(self, path):
+
+        Recording.__init__(self, path=path)
+
+        h5files = [f for f in self._path.glob('*.h5')]
+        if not len(h5files) == 1:
+            raise ValueError(f"There should be a single h5 file in this folder ({path}),"
+                             f"but this is not the case ({h5files})")
+        self._rawpath = h5files[0]
+        self._stimulipath = self._path / self._STIMULIDIRNAME
+        if self._stimulipath.exists():
+            self._stimuli = Stimuli(self._stimulipath)
+        else:
+            self._stimuli = None
+
+        self._amuapath = self._filteredpath / self._AMUANAME
+        self._lplfppath = self._filteredpath / self._LPLFPNAME
+        self._bplfppath = self._filteredpath / self._BPLFPNAME
+        self._esapath = self._filteredpath / self._ESANAME
+        self._figurepath = self._path / self._FIGUREDIRNAME
+        if not self._figurepath.exists():
+            self._figurepath.mkdir()
+
 
     @property
     def figurepath(self):
@@ -307,33 +396,6 @@ class Recording:
         else:
             return None
 
-    def create_lplfp(self, threads=None, reportprogress=True, overwrite=False):
-        with self.open_raw() as raw:
-            lfp = create_lplfp(raw, self._lplfppath,
-                               threads=threads, reportprogress=reportprogress,
-                               overwrite=overwrite)
-        return lfp
-
-    def create_bplfp(self, threads=None, reportprogress=True, overwrite=False):
-        with self.open_raw() as raw:
-            lfp = create_bplfp(raw, self._bplfppath,
-                               threads=threads, reportprogress=reportprogress,
-                               overwrite=overwrite)
-        return lfp
-
-    def create_esa(self, threads=None, reportprogress=True, overwrite=False):
-        with self.open_raw() as raw:
-            esa = create_esa(raw, self._esapath,
-                               threads=threads, reportprogress=reportprogress,
-                               overwrite=overwrite)
-        return esa
-
-    def create_amua(self, threads=None, reportprogress=True, overwrite=False):
-        with self.open_raw() as raw:
-            amua = create_amua(raw, self._amuapath,
-                               threads=threads, reportprogress=reportprogress,
-                               overwrite=overwrite)
-        return amua
 
     def stimulusspectrogram(self, starttime, endtime, nperseg=512, noverlap=256,
                             dynrange=40, ax=None, ylim=(0, 8000)):

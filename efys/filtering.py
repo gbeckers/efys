@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 import uts
+from pathlib import Path
 
 
 def _kernelduration_to_ntaps(kernelduration, fs):
@@ -8,6 +9,11 @@ def _kernelduration_to_ntaps(kernelduration, fs):
 
 def _decfactor(newfs, fs):
     return int(np.round(fs / float(newfs)))
+
+def _check_pathexists(path, overwrite):
+    if Path(path).exists() and not overwrite:
+        raise IOError(f'Path "{path}" already exists, use `overwrite` parameter to overwrite')
+
 
 def create_lplfp(raw, path='lfp_lp.darr', freq=200., width=50., kernelduration=0.05,
                  window="kaiser", mode='same', dtype=np.float32, newfs=1000.,
@@ -20,6 +26,7 @@ def create_lplfp(raw, path='lfp_lp.darr', freq=200., width=50., kernelduration=0
     attrs = {'lpntaps': ntaps, 'lpfs': raw.fs, 'lpfreq': freq,
              'lpwidth': width,
              'lpwindow': window, 'lpmode': mode, 'decimationfactor': decf}
+    _check_pathexists(path=path, overwrite=overwrite)
     with uts.cacheh5_itered(raw,
                           uts.ilp(raw, freq=freq, width=width, ntaps=ntaps,
                                   window=window, mode=mode,
@@ -43,6 +50,7 @@ def create_bplfp(raw, path='lfp_bp.darr', freqs=(1.0, 200.), widths=(0.5, 50.),
     attrs = {'lpntaps': lpntaps, 'lpfs': raw.fs, 'lpfreq': freqs[1],
              'lpwidth': widths[1], 'lpwindow': window, 'lpmode': mode,
              'decimationfactor': decf}
+    _check_pathexists(path=path, overwrite=overwrite)
     if reportprogress:
         print("starting lowpass")
     with uts.cacheh5_itered(raw, uts.ilp(raw, freq=freqs[1],
@@ -94,7 +102,7 @@ def create_amua(raw, path='amua.darr', hpfreq=350., width=50.,
                  'window': window, 'mode': mode,
                  'decimationfactor': decf,
                  'hfmeancorrected': int(hfmeancorrect)}
-
+        _check_pathexists(path=path, overwrite=overwrite)
         if reportprogress:
             print('starting high-pass')
             sys.stdout.flush()
@@ -119,8 +127,7 @@ def car(s):
 
 def create_esa(raw, path='amua.darr', hpfreq=350., hpwidth=50., hpkernelduration=0.05,
                lpfreq=30., lpwidth=5., lpkernelduration=0.1,
-                window="kaiser",
-                mode='same', newfs=1000., dtype=np.float32,
+                window="kaiser", mode='same', newfs=1000., dtype=np.float32,
                 overwrite=False, reportprogress=True, threads=None):
 
     """ESA was obtained by first digitally re-referencing the raw neural signals
@@ -139,7 +146,7 @@ def create_esa(raw, path='amua.darr', hpfreq=350., hpwidth=50., hpkernelduration
              'hpwidth': hpwidth, 'lpwidth': lpwidth,
              'window': window, 'mode': mode,
              'decimationfactor': decf}
-
+    _check_pathexists(path=path, overwrite=overwrite)
     if reportprogress:
         print('starting high-pass')
         sys.stdout.flush()
