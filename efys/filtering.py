@@ -33,7 +33,7 @@ def filtermne(s, outputpath, lfreq, hfreq, newfs=None, filterlength='auto', ltra
               htransbandwidth='auto',
               njobs=1, method='fir', iirparams=None, phase='zero', firwindow='hamming',
               firdesign='firwin', pad='reflect_limited', verbose=None, print_filterinfo=False,
-              overwrite=False):
+              dtype='float32', overwrite=False):
     """Filtering based on MNE `filter_data` function.
 
     This is the preferred way of filtering.
@@ -70,7 +70,7 @@ def filtermne(s, outputpath, lfreq, hfreq, newfs=None, filterlength='auto', ltra
     if newfs is not None:
         decf = _decfactor(newfs, s.fs)
     with uts.cachedarr(s, axisorder=('channel', 'time'),
-                       report=True, keep=False, dtype='float64') as rawfilt:
+                       report=True, keep=False, dtype='float64') as rawfilt: # mne works with float64 only
         data = rawfilt.samples.array
         if not outputpath.exists():
             outputpath.mkdir()
@@ -87,7 +87,7 @@ def filtermne(s, outputpath, lfreq, hfreq, newfs=None, filterlength='auto', ltra
             if newfs is not None:
                 rawfilt = uts.iter_decimate(rawfilt, decf, reportprogress=False)
         s = uts.savedarr(outputpath, rawfilt, axisorder=('time', 'channel'),
-                         overwrite=True)
+                         dtype=dtype, overwrite=True)
         filtparams = {
             'lfreq': lfreq,
             'hfreq': hfreq,
