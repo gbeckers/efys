@@ -16,9 +16,6 @@ from mne.filter import filter_data
 from pathlib import Path
 
 
-
-
-
 def _kernelduration_to_ntaps(kernelduration, fs):
     return uts.core.utils.round_nearestodd(kernelduration * fs)
 

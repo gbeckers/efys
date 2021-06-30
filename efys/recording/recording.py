@@ -3,6 +3,7 @@ import re
 import numpy as np
 import darr
 import uts
+import send2trash
 
 import matplotlib.pyplot as plt
 import efys
@@ -225,6 +226,10 @@ class Recording(BaseEfysDir):
     def filteredsignals(self):
         return self._filteredsignals
 
+    @property
+    def filteredsignalnames(self):
+        return sorted(list(self._filteredsignals.keys()))
+
     # to be implemented by subclass
     @contextmanager
     def open_raw(self):
@@ -287,6 +292,12 @@ class Recording(BaseEfysDir):
         s3 = self.create_lfp(hfreq=hfreq, method='iir', newfs=1000.,
                              signalname='lfp_iir', overwrite=overwrite)
         return [s1, s2, s3]
+
+    def filteredsend2trash(self, signalname):
+        path = self._filteredpath / signalname
+        if not path.exists():
+            raise IOError(f"signal '{signalname}' does not exist ({self.filteredsignalnames})")
+        send2trash.send2trash(str(path))
 
     #TODO mne
     def create_bplfp(self, threads=None, reportprogress=True, overwrite=False):

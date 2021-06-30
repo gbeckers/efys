@@ -19,6 +19,7 @@ Efys depends on the following Python libraries:
 * soundfile
 * uts
 * mne
+* send2trash
 
 Install
 -------
