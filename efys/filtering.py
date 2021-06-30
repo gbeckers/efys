@@ -1,9 +1,22 @@
+"""This module implements its own filtering functions (based on uts) as well as
+filtering functions based on MNE. The advantage of the latter is that it is a
+citable standard, and that it chooses sensible defaults. The disadvantage is
+though that under the hood it has to read whole channels into RAM memory at 64 bits.
+In case of long recordings and or high sampling rates, this may become problematic
+depending on your hardware.
+
+"""
+
 import sys
 import numpy as np
 import uts
 import mne
+import warnings
 from mne.filter import filter_data
 from pathlib import Path
+
+
+
 
 
 def _kernelduration_to_ntaps(kernelduration, fs):
@@ -19,7 +32,8 @@ def _check_pathexists(path, overwrite):
 def filtermne(s, outputpath, lfreq, hfreq, newfs=None, filterlength='auto', ltransbandwidth='auto',
               htransbandwidth='auto',
               njobs=1, method='fir', iirparams=None, phase='zero', firwindow='hamming',
-              firdesign='firwin', pad='reflect_limited', verbose=None, print_filterinfo=True):
+              firdesign='firwin', pad='reflect_limited', verbose=None, print_filterinfo=False,
+              overwrite=False):
     """Filtering based on MNE `filter_data` function.
 
     This is the preferred way of filtering.
@@ -49,13 +63,15 @@ def filtermne(s, outputpath, lfreq, hfreq, newfs=None, filterlength='auto', ltra
     uts signal
 
     """
-
+    outputpath = Path(outputpath)
+    if outputpath.exists() and not overwrite:
+        warnings.warn(f"'{outputpath}' exists and `overwrite` is False, skipping filtering ...")
+        return
     if newfs is not None:
         decf = _decfactor(newfs, s.fs)
     with uts.cachedarr(s, axisorder=('channel', 'time'),
                        report=True, keep=False, dtype='float64') as rawfilt:
         data = rawfilt.samples.array
-        outputpath = Path(outputpath)
         if not outputpath.exists():
             outputpath.mkdir()
         infofile = outputpath / 'mnestdoutinfo.txt'
@@ -87,7 +103,7 @@ def filtermne(s, outputpath, lfreq, hfreq, newfs=None, filterlength='auto', ltra
             'mneversion': mne.__version__,
             'utsversion': uts.__version__,
             'origfs': s.fs,
-            'newfs': rawfilt.fs,
+            'newfs': newfs,
             'decimatefactor': decf,
         }
         s.datadir.write_jsondict('filterparams.json', filtparams, overwrite=True)

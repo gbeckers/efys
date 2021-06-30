@@ -5,13 +5,56 @@ import darr
 import uts
 
 import matplotlib.pyplot as plt
+import efys
 from contextlib import contextmanager
 from pathlib import Path
 from . import mcsh5
 from efys.filtering import filtermne, create_bplfp, create_amua, create_esa
 from efys.stimuli import Stimuli
 
-class Experiment:
+
+class BaseEfysDir:
+
+    _infofilename = 'efys.json'
+
+    def __init__(self, path):
+        self._path = Path(path)
+        if not self.path.exists():
+            raise IOError(f'"{path}" does not exist')
+        self._name = self._path.name
+        self._datadir = darr.DataDir(self._path)
+        self._infofilepath = self._datadir.path / self._infofilename
+        self._check_infofile()
+
+    @property
+    def path(self):
+        return self._path
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def datadir(self):
+        return self._datadir
+
+    def _check_infofile(self):
+        if not self._infofilepath.exists():
+            self._update_infofile()
+
+    def _update_infofile(self, classname=None):
+        if classname is None:
+            classname = self.__class__.__name__
+        d = {'efysclass': classname,
+             'efysversion': efys.__version__}
+        self._datadir.write_jsondict(self._infofilepath,
+                                     d=d, overwrite=True)
+
+
+
+
+
+class Experiment(BaseEfysDir):
 
     """A directory that has subdirectories that represent recording sessions
     from one experiment.
@@ -28,11 +71,7 @@ class Experiment:
     """
 
     def __init__(self, path):
-        self._path = Path(path)
-        if not self.path.exists():
-            raise IOError(f'"{path}" does not exist')
-        self._name = self._path.name
-        self._datadir = darr.DataDir(self._path)
+        BaseEfysDir.__init__(self, path=path)
 
     def __str__(self):
         s = f"<Experiment: {self.path}>\n"
@@ -50,18 +89,6 @@ class Experiment:
             yield self[rn]
 
     @property
-    def path(self):
-        return self._path
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def datadir(self):
-        return self._datadir
-
-    @property
     def recordingsessionnames(self):
         rnames = sorted(path.name for path in self.path.glob('*') if path.is_dir())
         # only add if they do not fail
@@ -76,6 +103,11 @@ class Experiment:
                               f"{str(e)}", ResourceWarning)
         return validrnames
 
+    def _update_recordingclass(self, classname):
+        for rs in self:
+            for r in rs:
+                r._update_recordingclass(classname)
+
     def search_recordings(self, regexp):
         d = {}
         for rs in self:
@@ -86,9 +118,18 @@ class Experiment:
                     d[rs.name][rname] = r
         return d
 
+    def create_lfps(self, hfreq=200., print_progress=True, overwrite=False):
+        for rs in self:
+            if print_progress:
+                print(f'Recording session {rs.name}')
+            for r in rs:
+                if print_progress:
+                    print(f'\tRecording{r.name}')
+                r.create_lfps(hfreq=hfreq, overwrite=overwrite)
 
 
-class RecordingSession:
+
+class RecordingSession(BaseEfysDir):
     """A directory that has subdirectories that represent recordings from one
     recording session.
 
@@ -104,11 +145,7 @@ class RecordingSession:
     """
 
     def __init__(self, path):
-        self._path = Path(path)
-        if not self.path.exists():
-            raise IOError(f'"{path}" does not exist')
-        self._name = self._path.name
-        self._datadir = darr.DataDir(self._path)
+        BaseEfysDir.__init__(self, path=path)
 
     def __str__(self):
         s = f"<RecordingSession: {self.path}>\n"
@@ -119,23 +156,18 @@ class RecordingSession:
     __repr__ = __str__
 
     def __getitem__(self, key):
-        return Recording(self.path / key)
+        infofilepath = self.path / key / self._infofilename
+        if infofilepath.exists():
+            efysclass = self.datadir.read_jsondict(infofilepath)['efysclass']
+            r =  recordingclasses[efysclass](self.path / key)
+        else:
+
+            r = Recording(self.path / key)
+        return r
 
     def __iter__(self):
         for rn in self.recordingnames:
             yield self[rn]
-
-    @property
-    def path(self):
-        return self._path
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def datadir(self):
-        return self._datadir
 
     @property
     def recordingnames(self):
@@ -152,6 +184,10 @@ class RecordingSession:
                               f"{str(e)}", ResourceWarning)
         return validrnames
 
+    def _update_recordingclass(self, classname):
+        for r in self:
+            r._update_recordingclass(classname)
+
     def search_recordings(self, regexp):
         d = {}
         for name in self.recordingnames:
@@ -159,33 +195,23 @@ class RecordingSession:
                 d[name] = self[name]
         return d
 
+    def create_lfps(self, hfreq=200., overwrite=False):
+        for r in self:
+            r.create_lfps(hfreq=hfreq, overwrite=overwrite)
 
-
-class Recording:
+class Recording(BaseEfysDir):
 
     _filteredrecordingdirname = 'filtered'
     _rawrelpath = None # to be defined by sublass, relative to `path`, can be done in init
 
     def __init__(self, path):
-        self._path = Path(path)
-        if not self._path.exists():
-            raise IOError(f'"{path}" does not exist')
-        self._name = self._path.name
-        self._datadir = darr.DataDir(self._path)
+        BaseEfysDir.__init__(self, path=path)
         self._filteredpath = self._path / self._filteredrecordingdirname
         if not self._filteredpath.exists():
             self._filteredpath.mkdir()
         self._filteredsignals = {}
         self._update_filteredsignals()
 
-
-    @property
-    def path(self):
-        return self._path
-
-    @property
-    def datadir(self):
-        return self._datadir
 
     @property
     def rawpath(self):
@@ -198,7 +224,6 @@ class Recording:
     @property
     def filteredsignals(self):
         return self._filteredsignals
-
 
     # to be implemented by subclass
     @contextmanager
@@ -226,15 +251,22 @@ class Recording:
             s.metadata.update({'filterparams': filtparams})
             self._filteredsignals[sname.name] = s
 
-    def create_lfp(self, hfreq=200., phase='zero-double', method='fir', newfs=1000., signalname='lfp'):
+    def _update_recordingclass(self, classname):
+        if not classname in recordingclasses:
+            raise ValueError(f"Recording class `{classname}` does not exist.")
+        self._update_infofile(classname=classname)
+
+    def create_lfp(self, hfreq=200., phase='zero-double', method='fir', newfs=1000.,
+                   signalname='lfp', overwrite=False):
         outputpath = self.filteredpath / signalname
         with self.open_raw() as raw:
             lfp =  filtermne(s=raw, outputpath=outputpath, method=method,
-                             lfreq=None, hfreq=hfreq, phase=phase, newfs=newfs)
+                             lfreq=None, hfreq=hfreq, phase=phase, newfs=newfs,
+                             overwrite=overwrite)
         self._update_filteredsignals()
         return lfp
 
-    def create_lfps(self, hfreq=200.):
+    def create_lfps(self, hfreq=200., overwrite=False):
         """Created multiple lfp versions based on different filtering methods.
 
         Parameters
@@ -249,11 +281,11 @@ class Recording:
 
         """
         s1 = self.create_lfp(hfreq=hfreq, phase='zero', method='fir', newfs=1000.,
-                             signalname='lfp_fir_zero_phase')
+                             signalname='lfp_fir_zero_phase', overwrite=overwrite)
         s2 = self.create_lfp(hfreq=hfreq, phase='zero-double', method='fir', newfs=1000.,
-                             signalname='lfp_fir_zero_double_phase')
+                             signalname='lfp_fir_zero_double_phase', overwrite=overwrite)
         s3 = self.create_lfp(hfreq=hfreq, method='iir', newfs=1000.,
-                             signalname='lfp_iir')
+                             signalname='lfp_iir', overwrite=overwrite)
         return [s1, s2, s3]
 
     #TODO mne
@@ -491,4 +523,9 @@ class RecordingSL2020(Recording):
         return ax, f, t, Sxx
 
 
+recordingclasses = {
+    'Recording': Recording,
+    'RecordingPMM2015' : RecordingPMM2015,
+    'RecordingSL2020': RecordingSL2020,
+}
 
