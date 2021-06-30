@@ -3,11 +3,12 @@ import re
 import numpy as np
 import darr
 import uts
+
 import matplotlib.pyplot as plt
 from contextlib import contextmanager
 from pathlib import Path
 from . import mcsh5
-from efys.filtering import create_lplfp, create_bplfp, create_amua, create_esa
+from efys.filtering import filtermne, create_bplfp, create_amua, create_esa
 from efys.stimuli import Stimuli
 
 class Experiment:
@@ -174,6 +175,8 @@ class Recording:
         self._filteredpath = self._path / self._filteredrecordingdirname
         if not self._filteredpath.exists():
             self._filteredpath.mkdir()
+        self._filteredsignals = {}
+        self._update_filteredsignals()
 
 
     @property
@@ -191,6 +194,11 @@ class Recording:
     @property
     def filteredpath(self):
         return self._filteredpath
+
+    @property
+    def filteredsignals(self):
+        return self._filteredsignals
+
 
     # to be implemented by subclass
     @contextmanager
@@ -210,19 +218,45 @@ class Recording:
     def load_bitsnd(self):
         return None
 
-    def create_lplfp(self, freq=100., width=50., kernelduration=0.05,
-                 window="kaiser", mode='same', dtype=np.float32, newfs=1000.,
-                 reportprogress=True, chunksize=1024 * 75,
-                 threads=None, overwrite=False):
-        sname = f'lplfp_{int(freq)}_{int(width)}_{int(1000*kernelduration)}.darr'
+    def _update_filteredsignals(self):
+        for sname in sorted(self._filteredpath.glob('*')):
+            path = self._filteredpath / sname
+            filtparams = darr.DataDir(path).read_jsondict('filterparams.json')
+            s = uts.opendarr(path, 'r')
+            s.metadata.update({'filterparams': filtparams})
+            self._filteredsignals[sname.name] = s
+
+    def create_lfp(self, hfreq=200., phase='zero-double', method='fir', newfs=1000., signalname='lfp'):
+        outputpath = self.filteredpath / signalname
         with self.open_raw() as raw:
-            lfp = create_lplfp(raw, self.filteredpath / sname,
-                               threads=threads, reportprogress=reportprogress,
-                               freq=freq, width=width, kernelduration=kernelduration,
-                               window=window, mode=mode, dtype=dtype, newfs=newfs,
-                               chunksize=chunksize, overwrite=overwrite)
+            lfp =  filtermne(s=raw, outputpath=outputpath, method=method,
+                             lfreq=None, hfreq=hfreq, phase=phase, newfs=newfs)
+        self._update_filteredsignals()
         return lfp
 
+    def create_lfps(self, hfreq=200.):
+        """Created multiple lfp versions based on different filtering methods.
+
+        Parameters
+        ----------
+        hfreq: float
+            Corner frequency of low-pass filter.
+
+        Returns
+        -------
+        list
+            List of lfp signals
+
+        """
+        s1 = self.create_lfp(hfreq=hfreq, phase='zero', method='fir', newfs=1000.,
+                             signalname='lfp_fir_zero_phase')
+        s2 = self.create_lfp(hfreq=hfreq, phase='zero-double', method='fir', newfs=1000.,
+                             signalname='lfp_fir_zero_double_phase')
+        s3 = self.create_lfp(hfreq=hfreq, method='iir', newfs=1000.,
+                             signalname='lfp_iir')
+        return [s1, s2, s3]
+
+    #TODO mne
     def create_bplfp(self, threads=None, reportprogress=True, overwrite=False):
         with self.open_raw() as raw:
             lfp = create_bplfp(raw, self.filteredpath / 'bplfp.darr',
@@ -230,6 +264,7 @@ class Recording:
                                overwrite=overwrite)
         return lfp
 
+    #TODO throw away?
     def create_esa(self, threads=None, reportprogress=True, overwrite=False):
         with self.open_raw() as raw:
             esa = create_esa(raw, self.filteredpath / 'esa.darr',
@@ -237,6 +272,7 @@ class Recording:
                                overwrite=overwrite)
         return esa
 
+    # TODO mne
     def create_amua(self, threads=None, reportprogress=True, overwrite=False):
         with self.open_raw() as raw:
             amua = create_amua(raw, self.filteredpath / 'amua.darr',
@@ -259,7 +295,7 @@ class RecordingPMM2015(Recording):
         yield uts.opendarr(self.rawpath)
     # to be implemented by subclass
     def load_raw(self):
-        return uts.load(self.rawpath)
+        return uts.opendarr(self.rawpath)
 
     # to be implemented by subclass
     @contextmanager

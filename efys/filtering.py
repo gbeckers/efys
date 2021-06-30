@@ -1,6 +1,8 @@
 import sys
 import numpy as np
 import uts
+import mne
+from mne.filter import filter_data
 from pathlib import Path
 
 
@@ -13,6 +15,86 @@ def _decfactor(newfs, fs):
 def _check_pathexists(path, overwrite):
     if Path(path).exists() and not overwrite:
         raise IOError(f'Path "{path}" already exists, use `overwrite` parameter to overwrite')
+
+def filtermne(s, outputpath, lfreq, hfreq, newfs=None, filterlength='auto', ltransbandwidth='auto',
+              htransbandwidth='auto',
+              njobs=1, method='fir', iirparams=None, phase='zero', firwindow='hamming',
+              firdesign='firwin', pad='reflect_limited', verbose=None, print_filterinfo=True):
+    """Filtering based on MNE `filter_data` function.
+
+    This is the preferred way of filtering.
+
+    Parameters
+    ----------
+    s
+    outputpath
+    lfreq
+    hfreq
+    newfs
+    filterlength
+    ltransbandwidth
+    htransbandwidth
+    njobs
+    method
+    iirparams
+    phase
+    firwindow
+    firdesign
+    pad
+    verbose
+    print_filterinfo
+
+    Returns
+    -------
+    uts signal
+
+    """
+
+    if newfs is not None:
+        decf = _decfactor(newfs, s.fs)
+    with uts.cachedarr(s, axisorder=('channel', 'time'),
+                       report=True, keep=False, dtype='float64') as rawfilt:
+        data = rawfilt.samples.array
+        outputpath = Path(outputpath)
+        if not outputpath.exists():
+            outputpath.mkdir()
+        infofile = outputpath / 'mnestdoutinfo.txt'
+        if infofile.exists():
+            infofile.unlink()
+        mne.set_log_file(infofile)
+        with data._open_array() as (memmap, fd):
+            filter_data(data=memmap, sfreq=s.fs, l_freq=None, h_freq=hfreq,
+                        filter_length=filterlength, l_trans_bandwidth=ltransbandwidth,
+                        h_trans_bandwidth=htransbandwidth, n_jobs=njobs,
+                        method=method, iir_params=iirparams, copy=False, phase=phase,
+                        fir_window=firwindow, fir_design=firdesign, pad=pad, verbose=verbose)
+            if newfs is not None:
+                rawfilt = uts.iter_decimate(rawfilt, decf, reportprogress=False)
+        s = uts.savedarr(outputpath, rawfilt, axisorder=('time', 'channel'),
+                         overwrite=True)
+        filtparams = {
+            'lfreq': lfreq,
+            'hfreq': hfreq,
+            'filterlength': filterlength,
+            'ltransbandwidth': ltransbandwidth,
+            'htransbandwidth': htransbandwidth,
+            'method': method,
+            'iirparams': iirparams,
+            'phase': phase,
+            'firwindow': firwindow,
+            'firdesign': firdesign,
+            'pad': pad,
+            'mneversion': mne.__version__,
+            'utsversion': uts.__version__,
+            'origfs': s.fs,
+            'newfs': rawfilt.fs,
+            'decimatefactor': decf,
+        }
+        s.datadir.write_jsondict('filterparams.json', filtparams, overwrite=True)
+        mne.set_log_file(None)
+        if print_filterinfo:
+            print(s.datadir.read_txt(infofile.name))
+        return s
 
 
 def create_lplfp(raw, path='lfp_lp.darr', freq=200., width=50., kernelduration=0.05,
