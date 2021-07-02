@@ -20,6 +20,7 @@ Efys depends on the following Python libraries:
 * uts
 * mne
 * send2trash
+* dask
 
 Install
 -------

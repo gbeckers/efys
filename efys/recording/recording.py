@@ -10,7 +10,7 @@ import efys
 from contextlib import contextmanager
 from pathlib import Path
 from . import mcsh5
-from efys.filtering import filtermne, create_bplfp, create_amua, create_esa
+from efys.filtering import filtermne, create_bplfp, create_lplfp, create_amua, create_esa, create_esamne
 from efys.stimuli import Stimuli
 
 
@@ -119,15 +119,20 @@ class Experiment(BaseEfysDir):
                     d[rs.name][rname] = r
         return d
 
-    def create_lfps(self, hfreq=200., print_progress=True, overwrite=False):
+    def create_lplfp(self, freq=200., signalname='lplfp', print_progress=True, overwrite=False):
         for rs in self:
             if print_progress:
                 print(f'Recording session {rs.name}')
             for r in rs:
                 if print_progress:
                     print(f'\tRecording{r.name}')
-                r.create_lfps(hfreq=hfreq, overwrite=overwrite)
-
+                if not overwrite and (r.filteredpath / signalname).exists():
+                    if print_progress:
+                        print(f'\t\t{signalname} exists, skipping')
+                else:
+                    if print_progress:
+                        print(f'\t\tcalculating {signalname}')
+                    r.create_lplfp(freq=freq, signalname=signalname, reportprogress=False, overwrite=overwrite)
 
 
 class RecordingSession(BaseEfysDir):
@@ -196,9 +201,9 @@ class RecordingSession(BaseEfysDir):
                 d[name] = self[name]
         return d
 
-    def create_lfps(self, hfreq=200., overwrite=False):
+    def create_lplfp(self, freq=200., overwrite=False):
         for r in self:
-            r.create_lfps(hfreq=hfreq, overwrite=overwrite)
+            r.create_lplfp(freq=freq, reportprogress=False, overwrite=overwrite)
 
 class Recording(BaseEfysDir):
 
@@ -261,8 +266,8 @@ class Recording(BaseEfysDir):
             raise ValueError(f"Recording class `{classname}` does not exist.")
         self._update_infofile(classname=classname)
 
-    def create_lfp(self, hfreq=200., phase='zero-double', method='fir', newfs=1000.,
-                   signalname='lfp', overwrite=False):
+    def create_lfpmne(self, hfreq=200., phase='zero', method='fir', newfs=1000.,
+                   signalname='lplfp_mne', overwrite=False):
         outputpath = self.filteredpath / signalname
         with self.open_raw() as raw:
             lfp =  filtermne(s=raw, outputpath=outputpath, method=method,
@@ -271,27 +276,89 @@ class Recording(BaseEfysDir):
         self._update_filteredsignals()
         return lfp
 
-    def create_lfps(self, hfreq=200., overwrite=False):
-        """Created multiple lfp versions based on different filtering methods.
+    def create_lplfp(self, freq=200., phase='zero', newfs=1000.,
+                   signalname='lplfp', threads=4, reportprogress=True, overwrite=False):
+        """LFP filter based on low-pass filtering only
+
+        Filter characteristics are designed by mne, but filtering is done
+        by uts for memory efficiency.
 
         Parameters
         ----------
-        hfreq: float
-            Corner frequency of low-pass filter.
+        freq
+        phase
+        newfs
+        signalname
+        overwrite
 
         Returns
         -------
-        list
-            List of lfp signals
+        MultiChannelUniformTimeSeries
 
         """
-        s1 = self.create_lfp(hfreq=hfreq, phase='zero', method='fir', newfs=1000.,
-                             signalname='lfp_fir_zero_phase', overwrite=overwrite)
-        s2 = self.create_lfp(hfreq=hfreq, phase='zero-double', method='fir', newfs=1000.,
-                             signalname='lfp_fir_zero_double_phase', overwrite=overwrite)
-        s3 = self.create_lfp(hfreq=hfreq, method='iir', newfs=1000.,
-                             signalname='lfp_iir', overwrite=overwrite)
-        return [s1, s2, s3]
+        outputpath = self.filteredpath / signalname
+        with self.open_raw() as raw:
+            lfp = create_lplfp(s=raw, path=outputpath, freq=freq, phase=phase, newfs=newfs,
+                               threads=threads, reportprogress=reportprogress, overwrite=overwrite)
+        self._update_filteredsignals()
+        return lfp
+
+    def create_bplfp(self, freqs=(0.5, 200.), phase='zero', newfs=1000.,
+                   signalname='bplfp', threads=4, reportprogress=True, overwrite=False):
+        """LFP filter based on band-pass filtering
+
+        Filter characteristics are designed by mne, but filtering is done
+        by uts for memory efficiency.
+
+        Parameters
+        ----------
+        freqs:
+            tuple (low, high)
+        phase
+        newfs
+        signalname
+        overwrite
+
+        Returns
+        -------
+        MultiChannelUniformTimeSeries
+
+        """
+        outputpath = self.filteredpath / signalname
+        with self.open_raw() as raw:
+            lfp = create_bplfp(s=raw, path=outputpath, freqs=freqs, phase=phase, newfs=newfs,
+                               threads=threads, reportprogress=reportprogress, overwrite=overwrite)
+        self._update_filteredsignals()
+        return lfp
+
+    # def create_lfps(self, hfreq=200., overwrite=False):
+    #     """Created multiple lfp versions based on different filtering methods.
+    #
+    #     Parameters
+    #     ----------
+    #     hfreq: float
+    #         Corner frequency of low-pass filter.
+    #
+    #     Returns
+    #     -------
+    #     list
+    #         List of lfp signals
+    #
+    #     """
+    #     s1 = self.create_lfp(hfreq=hfreq, phase='zero', method='fir', newfs=1000.,
+    #                          signalname='lfp_fir_zero_phase', overwrite=overwrite)
+    #     s2 = self.create_lfp(hfreq=hfreq, phase='zero-double', method='fir', newfs=1000.,
+    #                          signalname='lfp_fir_zero_double_phase', overwrite=overwrite)
+    #     s3 = self.create_lfp(hfreq=hfreq, method='iir', newfs=1000.,
+    #                          signalname='lfp_iir', overwrite=overwrite)
+    #     return [s1, s2, s3]
+
+    def create_esamne(self, signalname='esamne', overwrite=False):
+        with self.open_raw() as raw:
+            esa = create_esamne(raw, self.filteredpath / signalname, overwrite=overwrite)
+        self._update_filteredsignals()
+        return esa
+
 
     def filteredsend2trash(self, signalname):
         path = self._filteredpath / signalname
@@ -299,13 +366,6 @@ class Recording(BaseEfysDir):
             raise IOError(f"signal '{signalname}' does not exist ({self.filteredsignalnames})")
         send2trash.send2trash(str(path))
 
-    #TODO mne
-    def create_bplfp(self, threads=None, reportprogress=True, overwrite=False):
-        with self.open_raw() as raw:
-            lfp = create_bplfp(raw, self.filteredpath / 'bplfp.darr',
-                               threads=threads, reportprogress=reportprogress,
-                               overwrite=overwrite)
-        return lfp
 
     #TODO throw away?
     def create_esa(self, threads=None, reportprogress=True, overwrite=False):
@@ -315,12 +375,12 @@ class Recording(BaseEfysDir):
                                overwrite=overwrite)
         return esa
 
-    # TODO mne
-    def create_amua(self, threads=None, reportprogress=True, overwrite=False):
+    def create_amua(self, threads=4, reportprogress=True, overwrite=False):
         with self.open_raw() as raw:
-            amua = create_amua(raw, self.filteredpath / 'amua.darr',
+            amua = create_amua(raw, self.filteredpath / 'amua',
                                threads=threads, reportprogress=reportprogress,
                                overwrite=overwrite)
+        self._update_filteredsignals()
         return amua
 
 class RecordingPMM2015(Recording):
