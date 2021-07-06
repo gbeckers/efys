@@ -9,6 +9,11 @@ from pathlib import Path
 from . import edf
 from . import openbci
 
+def normalize(a, axis=0):
+    a -= a.mean(axis=axis)
+    a /= a.std()
+    return a
+
 
 def find_calibmarks(snd, calibmark, searchduration=30., recordedasbit=False, bitthreshold=0.005):
     """Finds calibration stimuli at beginning and end of a longer sound (usually
@@ -32,6 +37,8 @@ def find_calibmarks(snd, calibmark, searchduration=30., recordedasbit=False, bit
     (starttime1, starttime2)
 
     """
+    taillen = 10
+    correctones = True
 
     if calibmark.fs != snd.fs:
         calibmark = uts.resample(calibmark, snd.fs / calibmark.fs)
@@ -41,11 +48,25 @@ def find_calibmarks(snd, calibmark, searchduration=30., recordedasbit=False, bit
     if recordedasbit:
         calibsamples = (calibsamples > bitthreshold).astype('float64')
     target1 = snd.samples[:searchnframes].astype('float64')
+    if correctones:
+        a = np.correlate(target1, np.ones(taillen), 'same')
+        target1[a == taillen] = 0.
+    plt.figure()
+    plt.plot(snd[:searchnframes].samplingtimes(),target1)
+    #target1 = normalize(target1)
     cc = np.correlate(target1, calibsamples, mode='valid')
     r1 = cc.argmax()
     # second calibmark
     target2 = snd.samples[-searchnframes:].astype('float64')
+    if correctones:
+        a = np.correlate(target2, np.ones(taillen), 'same')
+        target2[a == taillen] = 0.
+    plt.figure()
+    plt.plot(snd[-searchnframes:].samplingtimes(),target2)
+    #target2 = normalize(target2)
     cc = np.correlate(target2, calibsamples, mode='valid')
+    plt.figure()
+    plt.plot(cc)
     r2 = cc.argmax() + snd.ntimesamples - searchnframes
     return snd.index_to_time((r1, r2))
 
@@ -203,11 +224,13 @@ def create_recordingstimulusinfoopenbci(datafilepath, playbackstimulustablepath,
     with open(datafilepath, 'r') as f:
         firstline = f.readline()
         if "OpenBCI Raw EEG Data" in firstline:
-            loaddata = openbci.load_openbcidata
             audiochannel = 'other03'
+            bitsnd = openbci.load_openbcidata(filepath=datafilepath)[:, audiochannel]
         else:
-            loaddata = openbci.load_thinkpulsedata
             audiochannel = 'accel_1'
+            sampleindex, eeg, accel = openbci.load_thinkpulsedata(filepath=datafilepath)
+            bitsnd = accel[:,[audiochannel]]
+            bitsnd.samples.array[bitsnd.samples.array == 256] = 1
     recordedasbit = True
     checkcalibmarks = True
     if outputpath is None:
@@ -215,7 +238,7 @@ def create_recordingstimulusinfoopenbci(datafilepath, playbackstimulustablepath,
     else:
         outputpath = Path(outputpath)
     pst = pd.read_csv(playbackstimulustablepath)
-    bitsnd = loaddata(filepath=datafilepath)[:,audiochannel]
+
     fs, data = wavfile.read(filename=str(playbackwavpath))
     playbacksnd = uts.UniformTimeSeries(samples=data, fs=float(fs))
     st, params, (fig1, fig2) = create_recordingstimulustable(recordedsnd=bitsnd,

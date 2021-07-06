@@ -14,19 +14,36 @@ def hexstrtomicrovolt(hexstr, minV=-4.5, maxV=4.5, gain=8):
     value *= (maxV - minV) / (16.777216 * gain) # 16.777216 = 2**24 / 1e6
     return value
 
+def strtobit(hexstr):
+    if pd.isna(hexstr):
+        return 0
+    else:
+        return int(hexstr)
+
+
+# TODO, this function could be improved by just reading directly from text
 def load_thinkpulsedata(filepath, fs=250., startdatetime='NaT'):
-    columnnames =  ['sampleindex','channel_00','channel_01','channel_02','channel_03','channel_04',
-                           'channel_05','channel_06','channel_07','accel_0','accel_1','accel_2']
+    eegcolumns =  ['channel_00','channel_01','channel_02','channel_03',
+                   'channel_04', 'channel_05','channel_06','channel_07']
+    accelcolumns = ['accel_0','accel_1','accel_2']
+    sampleindexcolumn = ['sampleindex']
+    columnnames = sampleindexcolumn + eegcolumns + accelcolumns
     dtype = {cn: str for cn in columnnames}
     df = pd.read_csv(filepath, skiprows=2, names=columnnames, dtype=dtype)
-    for colname in ('channel_00','channel_01','channel_02','channel_03','channel_04',
-                    'channel_05','channel_06','channel_07','accel_0','accel_1','accel_2'):
+    for colname in eegcolumns:
         df[colname] = df[colname].apply(hexstrtomicrovolt)
+    for colname in accelcolumns:
+        df[colname] = df[colname].apply(lambda s: int(s, 16))
     df['sampleindex'] = df['sampleindex'].apply(lambda s: int(s, 16))
-    s = uts.MultiChannelUniformTimeSeries(df.to_numpy(),
-                                          fs=float(fs), channelnames=columnnames,
+    eeg = uts.MultiChannelUniformTimeSeries(df[eegcolumns].to_numpy(),
+                                          fs=float(fs), channelnames=eegcolumns,
                                           startdatetime=startdatetime)
-    return s
+    accel = uts.MultiChannelUniformTimeSeries(df[accelcolumns].to_numpy(),
+                                          fs=float(fs), channelnames=accelcolumns,
+                                          startdatetime=startdatetime)
+    sampleindex = uts.UniformTimeSeries(df[sampleindexcolumn].values[:,0],
+                                      fs=float(fs), startdatetime=startdatetime)
+    return sampleindex, eeg, accel
 
 #TODO improve reading header by regexp
 # other channels, Analog and accel

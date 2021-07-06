@@ -134,6 +134,21 @@ class Experiment(BaseEfysDir):
                         print(f'\t\tcalculating {signalname}')
                     r.create_lplfp(freq=freq, signalname=signalname, reportprogress=False, overwrite=overwrite)
 
+    def create_amua(self, signalname='amua', print_progress=True, overwrite=False):
+        for rs in self:
+            if print_progress:
+                print(f'Recording session {rs.name}')
+            for r in rs:
+                if print_progress:
+                    print(f'\tRecording{r.name}')
+                if not overwrite and (r.filteredpath / signalname).exists():
+                    if print_progress:
+                        print(f'\t\t{signalname} exists, skipping')
+                else:
+                    if print_progress:
+                        print(f'\t\tcalculating {signalname}')
+                    r.create_amua(signalname=signalname, reportprogress=False, overwrite=overwrite)
+
 
 class RecordingSession(BaseEfysDir):
     """A directory that has subdirectories that represent recordings from one
@@ -256,9 +271,10 @@ class Recording(BaseEfysDir):
     def _update_filteredsignals(self):
         for sname in sorted(self._filteredpath.glob('*')):
             path = self._filteredpath / sname
-            filtparams = darr.DataDir(path).read_jsondict('filterparams.json')
             s = uts.opendarr(path, 'r')
-            s.metadata.update({'filterparams': filtparams})
+            if (path / 'filterparams.json').exists():
+                filtparams = darr.DataDir(path).read_jsondict('filterparams.json')
+                s.metadata.update({'filterparams': filtparams})
             self._filteredsignals[sname.name] = s
 
     def _update_recordingclass(self, classname):
@@ -375,9 +391,9 @@ class Recording(BaseEfysDir):
                                overwrite=overwrite)
         return esa
 
-    def create_amua(self, threads=4, reportprogress=True, overwrite=False):
+    def create_amua(self, signalname='amua', threads=4, reportprogress=True, overwrite=False):
         with self.open_raw() as raw:
-            amua = create_amua(raw, self.filteredpath / 'amua',
+            amua = create_amua(raw, self.filteredpath / signalname,
                                threads=threads, reportprogress=reportprogress,
                                overwrite=overwrite)
         self._update_filteredsignals()
