@@ -272,9 +272,6 @@ class Recording(BaseEfysDir):
         for sname in sorted(self._filteredpath.glob('*')):
             path = self._filteredpath / sname
             s = uts.opendarr(path, 'r')
-            if (path / 'filterparams.json').exists():
-                filtparams = darr.DataDir(path).read_jsondict('filterparams.json')
-                s.metadata.update({'filterparams': filtparams})
             self._filteredsignals[sname.name] = s
 
     def _update_recordingclass(self, classname):
@@ -383,12 +380,14 @@ class Recording(BaseEfysDir):
         send2trash.send2trash(str(path))
 
 
-    #TODO throw away?
-    def create_esa(self, threads=None, reportprogress=True, overwrite=False):
+    def create_esa(self, signalname='esa', threads=None, reportprogress=True,
+                   overwrite=False):
+        outputpath = self.filteredpath / signalname
         with self.open_raw() as raw:
-            esa = create_esa(raw, self.filteredpath / 'esa.darr',
+            esa = create_esa(raw, path=outputpath,
                                threads=threads, reportprogress=reportprogress,
                                overwrite=overwrite)
+        self._update_filteredsignals()
         return esa
 
     def create_amua(self, signalname='amua', threads=4, reportprogress=True, overwrite=False):

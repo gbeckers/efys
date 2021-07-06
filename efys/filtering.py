@@ -211,7 +211,6 @@ def create_lplfp(s, path='lfplp', freq=200., htransbandwidth='auto', filterlengt
                            mode=mode, chunksize=chunksize, threads=threads)
     return uts.savedarr(path, s, overwrite=overwrite)
 
-# FIXME save filter data of both stages
 def create_bplfp(s, path='bplfp', freqs=(0.5, 200.), newfs=1000., ltransbandwidth='auto', htransbandwidth='auto',
                  filterlength='auto', firwindow='hamming', phase='zero', firdesign='firwin',
                  mode='same', dtype=np.float32, overwrite=False, reportprogress=True,
@@ -233,7 +232,8 @@ def create_bplfp(s, path='bplfp', freqs=(0.5, 200.), newfs=1000., ltransbandwidt
                         chunksize=chunksize, threads=threads)
         s = uts.savedarr(path, bp, overwrite=True)
         filterparams['hp'] = s.metadata['filterparameters']
-        s.metadata['filterparameters'] = filterparams
+        s.datadir.update_jsondict('metadata.json',{'filterparameters':
+                                                   filterparams})
         s.datadir.write_jsondict('filterparams.json',
                                  filterparams, overwrite=True)
         return s
@@ -275,19 +275,19 @@ def create_amua(s, path='amua', freq=350., transbandwidth='auto',
         if reportprogress:
             print('starting decimating and saving amua signal')
             sys.stdout.flush()
-
         s = uts.savedarr(path=path, s=deciterframes, dtype=dtype,
                          axisorder=['time','channel'], overwrite=True)
         filterparams = s.metadata['filterparameters']
         filterparams['decimationfactor'] = decf
         filterparams['newfs'] = newfs
-        s.metadata['filterparameters'] = filterparams
+        s.datadir.update_jsondict('metadata.json',{'filterparameters':
+                                                   filterparams})
         s.datadir.write_jsondict('filterparams.json',
                                  filterparams, overwrite=True)
         return s
 
 
-
+#TODO remove dask dependence, use uts
 def create_esamne(s, outputpath, overwrite=False):
 
     import dask
@@ -353,60 +353,59 @@ def create_esamne(s, outputpath, overwrite=False):
             'newfs': newfs,
             'decimatefactor': decf,
         }
+        s.datadir.update_jsondict('metadata.json', {'filterparameters':
+                                                        filtparams})
         s.datadir.write_jsondict('filterparams.json', filtparams, overwrite=True)
         mne.set_log_file(None)
 
         return s
 
-# TODO apply firfilteruts and darr cache
-def create_esa(raw, path='esa', hpfreq=350., hpwidth=50., hpkernelduration=0.05,
-               lpfreq=30., lpwidth=5., lpkernelduration=0.1,
-                window="kaiser", mode='same', newfs=1000., dtype=np.float32,
-                overwrite=False, reportprogress=True, threads=None):
 
-    """ESA was obtained by first digitally re-referencing the raw neural signals
-        with common average reference (CAR) and high-pass filtering with 1st-order
-        Butterworth filter at 300 Hz. The filtered signals were then full-wave rectified,
-        low-pass filtered with 1st-order Butterworth filter at 12 Hz and downsampled to 1 kHz.
-        All the filtering processes were performed in both forward and backward directions. """
+def create_esa(s, path='esa', hpfreq=350., lpfreq=30., hptransbandwidth='auto',
+               lptransbandwidth='auto', hpfilterlength='auto',
+               lpfilterlength='auto', firwindow='hamming', phase='zero',
+                firdesign='firwin', mode='same', newfs=1000., dtype=np.float32,
+                overwrite=False, reportprogress=True, threads=None,
+                chunksize=1024*75):
 
-    decf = _decfactor(newfs, raw.fs)
-    hpntaps = _kernelduration_to_ntaps(kernelduration=hpkernelduration,
-                                     fs=raw.fs)
-    lpntaps = _kernelduration_to_ntaps(kernelduration=lpkernelduration,
-                                       fs=raw.fs)
-    attrs = {'hpntaps': hpntaps, 'lpntaps': lpntaps, 'rawfs': raw.fs,
-             'hpfreq': hpfreq, 'lpfreq': lpfreq,
-             'hpwidth': hpwidth, 'lpwidth': lpwidth,
-             'window': window, 'mode': mode,
-             'decimationfactor': decf}
     _check_pathexists(path=path, overwrite=overwrite)
+    decf = _decfactor(newfs, s.fs)
     if reportprogress:
         print('starting high-pass')
         sys.stdout.flush()
-    with uts.cacheh5_itered(raw, uts.iter_map(uts.abs, uts.ihp(raw,
-                                                               freq=hpfreq, width=hpwidth,
-                                                               ntaps=lpntaps,
-                                                               window=window, mode=mode,
-                                                               dtype=np.float64,
-                                                               reportprogress=reportprogress,
-                                                               threads=threads)),
-                            dtype=np.float64, attrs=attrs, channelaxis=1) as absspikes:
-        with uts.cacheh5_itered(absspikes, uts.ilp(absspikes, freq=lpfreq, width=lpwidth,
-                                                      threads=threads, ntaps=hpntaps, window=window,
-                                                      mode=mode, reportprogress=reportprogress,
-                                                      dtype=np.float64),
-                                    dtype=np.float64, attrs=attrs, channelaxis=1) as esa:
-
-            if reportprogress:
-                print('starting decimating and saving')
-                sys.stdout.flush()
-            with uts.cacheh5(uts.iter_decimate(esa, decf)) as ar:
-                return uts.savedarr(path=path, s=ar, dtype=dtype, axisorder=['time','channel'], overwrite=overwrite)
-
-
-
-
-
-
-
+    hp = iter_firfilteruts(s, lfreq=hpfreq, hfreq=None,
+                           newfs=None, filterlength=hpfilterlength,
+                           ltransbandwidth=hptransbandwidth, phase=phase,
+                           firwindow=firwindow, firdesign=firdesign,
+                           dtype=dtype, reportprogress=reportprogress,
+                           mode=mode, chunksize=chunksize, threads=threads)
+    filterparams = {}
+    with uts.cachedarr(hp, report=True, keep=False, dtype='float64',
+                       axisorder=['time','channel']) as sfilt:
+        filterparams['hp'] = sfilt.metadata['filterparameters']
+        if reportprogress:
+            print(f'starting car filtering and taking absolute')
+        da = sfilt.samples.array
+        with da.open():
+            for i,j in da.iterindices(chunklen=chunksize):
+                chunk = da._memmap[i:j]
+                chunk -= np.mean(chunk, axis=1, keepdims=True)
+                da._memmap[i:j] = np.absolute(chunk)
+        lp = iter_firfilteruts(sfilt, lfreq=None, hfreq=lpfreq,
+                               newfs=newfs, filterlength=lpfilterlength,
+                               htransbandwidth=lptransbandwidth, phase=phase,
+                               firwindow=firwindow, firdesign=firdesign,
+                               dtype=dtype, reportprogress=reportprogress,
+                               mode=mode, chunksize=chunksize, threads=threads)
+        if reportprogress:
+            print('starting low-pass filtering, decimating and saving esa '
+                  'signal')
+            sys.stdout.flush()
+        s = uts.savedarr(path=path, s=lp, dtype=dtype,
+                         axisorder=['time','channel'], overwrite=True)
+        filterparams['lp'] = s.metadata['filterparameters']
+        s.datadir.update_jsondict('metadata.json',{'filterparameters':
+                                                   filterparams})
+        s.datadir.write_jsondict('filterparams.json',
+                                 filterparams, overwrite=True)
+        return s
