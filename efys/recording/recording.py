@@ -4,6 +4,7 @@ import numpy as np
 import darr
 import uts
 import send2trash
+import pandas as pd
 
 import matplotlib.pyplot as plt
 import efys
@@ -119,35 +120,39 @@ class Experiment(BaseEfysDir):
                     d[rs.name][rname] = r
         return d
 
-    def create_lplfp(self, freq=200., signalname='lplfp', print_progress=True, overwrite=False):
-        for rs in self:
-            if print_progress:
-                print(f'Recording session {rs.name}')
-            for r in rs:
-                if print_progress:
-                    print(f'\tRecording{r.name}')
-                if not overwrite and (r.filteredpath / signalname).exists():
-                    if print_progress:
-                        print(f'\t\t{signalname} exists, skipping')
-                else:
-                    if print_progress:
-                        print(f'\t\tcalculating {signalname}')
-                    r.create_lplfp(freq=freq, signalname=signalname, reportprogress=False, overwrite=overwrite)
+    def iter_recordings(self, print_progress=True):
+        """Iterates over recordings in recordinsessions in experiment
 
-    def create_amua(self, signalname='amua', print_progress=True, overwrite=False):
+        Parameters
+        ----------
+        print_progress
+
+        Returns
+        -------
+        iterates over (recordingsession, recording) tuples
+
+        """
         for rs in self:
             if print_progress:
                 print(f'Recording session {rs.name}')
             for r in rs:
                 if print_progress:
                     print(f'\tRecording{r.name}')
-                if not overwrite and (r.filteredpath / signalname).exists():
-                    if print_progress:
-                        print(f'\t\t{signalname} exists, skipping')
-                else:
-                    if print_progress:
-                        print(f'\t\tcalculating {signalname}')
-                    r.create_amua(signalname=signalname, reportprogress=False, overwrite=overwrite)
+                yield rs, r
+
+
+    def create_lplfp(self, freq=200., signalname='lplfp', threads=4, print_progress=True, overwrite=False):
+        for r, rs in self.iter_recordings(print_progress=print_progress):
+            r.create_lplfp(freq=freq, signalname=signalname, threads=threads, reportprogress=False, overwrite=overwrite)
+
+    def create_amua(self, signalname='amua', threads=4, print_progress=True, overwrite=False):
+        for r, rs in self.iter_recordings(print_progress=print_progress):
+            r.create_amua(signalname=signalname, reportprogress=False, threads=threads, overwrite=overwrite)
+
+    def create_filteredsignals(self, threads=4, overwrite=False, print_progress=False):
+        for r, rs in self.iter_recordings(print_progress=print_progress):
+            r.create_filteredsignals(threads=threads, overwrite=overwrite)
+
 
 
 class RecordingSession(BaseEfysDir):
@@ -224,6 +229,9 @@ class Recording(BaseEfysDir):
 
     _filteredrecordingdirname = 'filtered'
     _rawrelpath = None # to be defined by sublass, relative to `path`, can be done in init
+    _stimulidirname = 'stimuli'
+    _stimulustablename = 'stimulustable.csv'
+    _figuredirname = 'figures'
 
     def __init__(self, path):
         BaseEfysDir.__init__(self, path=path)
@@ -232,7 +240,32 @@ class Recording(BaseEfysDir):
             self._filteredpath.mkdir()
         self._filteredsignals = {}
         self._update_filteredsignals()
+        self._figurepath = self._path / self._figuredirname
+        self._stimulipath = self._path / self._stimulidirname
+        self._stimulustablepath = self._stimulipath / self._stimulustablename
+        if not self._stimulipath.exists():
+            self._stimulipath.mkdir()
+        if not self._figurepath.exists():
+            self._figurepath.mkdir()
 
+    @property
+    def figurepath(self):
+        return self._figurepath
+
+    @property
+    def stimulipath(self):
+        return self._stimulipath
+
+    @property
+    def stimulustablepath(self):
+        return self._stimulustablepath
+
+    @property
+    def stimulustable(self):
+        if self._stimulustablepath.exists():
+            return pd.read_csv(self._stimulustablepath)
+        else:
+            return None
 
     @property
     def rawpath(self):
@@ -279,16 +312,6 @@ class Recording(BaseEfysDir):
             raise ValueError(f"Recording class `{classname}` does not exist.")
         self._update_infofile(classname=classname)
 
-    def create_lfpmne(self, hfreq=200., phase='zero', method='fir', newfs=1000.,
-                   signalname='lplfp_mne', overwrite=False):
-        outputpath = self.filteredpath / signalname
-        with self.open_raw() as raw:
-            lfp =  filtermne(s=raw, outputpath=outputpath, method=method,
-                             lfreq=None, hfreq=hfreq, phase=phase, newfs=newfs,
-                             overwrite=overwrite)
-        self._update_filteredsignals()
-        return lfp
-
     def create_lplfp(self, freq=200., phase='zero', newfs=1000.,
                    signalname='lplfp', threads=4, reportprogress=True, overwrite=False):
         """LFP filter based on low-pass filtering only
@@ -310,6 +333,9 @@ class Recording(BaseEfysDir):
 
         """
         outputpath = self.filteredpath / signalname
+        if not overwrite and outputpath.exists():
+            print(f'{outputpath} exists and overwrite is False, skipping...')
+            return
         with self.open_raw() as raw:
             lfp = create_lplfp(s=raw, path=outputpath, freq=freq, phase=phase, newfs=newfs,
                                threads=threads, reportprogress=reportprogress, overwrite=overwrite)
@@ -338,51 +364,31 @@ class Recording(BaseEfysDir):
 
         """
         outputpath = self.filteredpath / signalname
+        if not overwrite and outputpath.exists():
+            print(f'{outputpath} exists and overwrite is False, skipping...')
+            return
         with self.open_raw() as raw:
             lfp = create_bplfp(s=raw, path=outputpath, freqs=freqs, phase=phase, newfs=newfs,
                                threads=threads, reportprogress=reportprogress, overwrite=overwrite)
         self._update_filteredsignals()
         return lfp
 
-    # def create_lfps(self, hfreq=200., overwrite=False):
-    #     """Created multiple lfp versions based on different filtering methods.
-    #
-    #     Parameters
-    #     ----------
-    #     hfreq: float
-    #         Corner frequency of low-pass filter.
-    #
-    #     Returns
-    #     -------
-    #     list
-    #         List of lfp signals
-    #
-    #     """
-    #     s1 = self.create_lfp(hfreq=hfreq, phase='zero', method='fir', newfs=1000.,
-    #                          signalname='lfp_fir_zero_phase', overwrite=overwrite)
-    #     s2 = self.create_lfp(hfreq=hfreq, phase='zero-double', method='fir', newfs=1000.,
-    #                          signalname='lfp_fir_zero_double_phase', overwrite=overwrite)
-    #     s3 = self.create_lfp(hfreq=hfreq, method='iir', newfs=1000.,
-    #                          signalname='lfp_iir', overwrite=overwrite)
-    #     return [s1, s2, s3]
+    def create_filteredsignals(self, threads=4, overwrite=False):
+        """Create standard filtered signals: bplfp, lplfp, amua, esa
 
-    def create_esamne(self, signalname='esamne', overwrite=False):
-        with self.open_raw() as raw:
-            esa = create_esamne(raw, self.filteredpath / signalname, overwrite=overwrite)
-        self._update_filteredsignals()
-        return esa
-
-
-    def filteredsend2trash(self, signalname):
-        path = self._filteredpath / signalname
-        if not path.exists():
-            raise IOError(f"signal '{signalname}' does not exist ({self.filteredsignalnames})")
-        send2trash.send2trash(str(path))
-
+        """
+        s1 = self.create_bplfp(threads=threads, overwrite=overwrite)
+        s2 = self.create_lplfp(threads=threads, overwrite=overwrite)
+        s3 = self.create_amua(threads=threads, overwrite=overwrite)
+        s4 = self.create_esa(threads=threads, overwrite=overwrite)
+        return [s1, s2, s3, s4]
 
     def create_esa(self, signalname='esa', threads=None, reportprogress=True,
                    overwrite=False):
         outputpath = self.filteredpath / signalname
+        if not overwrite and outputpath.exists():
+            print(f'{outputpath} exists and overwrite is False, skipping...')
+            return
         with self.open_raw() as raw:
             esa = create_esa(raw, path=outputpath,
                                threads=threads, reportprogress=reportprogress,
@@ -391,6 +397,10 @@ class Recording(BaseEfysDir):
         return esa
 
     def create_amua(self, signalname='amua', threads=4, reportprogress=True, overwrite=False):
+        outputpath = self.filteredpath / signalname
+        if not overwrite and outputpath.exists():
+            print(f'{outputpath} exists and overwrite is False, skipping...')
+            return
         with self.open_raw() as raw:
             amua = create_amua(raw, self.filteredpath / signalname,
                                threads=threads, reportprogress=reportprogress,
@@ -398,9 +408,16 @@ class Recording(BaseEfysDir):
         self._update_filteredsignals()
         return amua
 
+    def filteredsend2trash(self, signalname):
+        path = self._filteredpath / signalname
+        if not path.exists():
+            raise IOError(f"signal '{signalname}' does not exist ({self.filteredsignalnames})")
+        send2trash.send2trash(str(path))
+
+
 class RecordingPMM2015(Recording):
 
-    _rawrelpath = 'recording.darr'  # to be defined by sublass, relative to `path`, can be done in init
+    _rawrelpath = 'recording.darr'
     _bitsndpath = 'sound.darr'
 
     @property
@@ -427,9 +444,6 @@ class RecordingPMM2015(Recording):
 
 class RecordingSL2020(Recording):
 
-
-    _STIMULIDIRNAME = 'stimuli'
-    _FIGUREDIRNAME = 'figures'
     _LPLFPNAME = 'lplfp.darr'
     _BPLFPNAME = 'bplfp.darr'
     _AMUANAME = 'amua.darr'
@@ -444,24 +458,10 @@ class RecordingSL2020(Recording):
             raise ValueError(f"There should be a single h5 file in this folder ({path}),"
                              f"but this is not the case ({h5files})")
         self._rawpath = h5files[0]
-        self._stimulipath = self._path / self._STIMULIDIRNAME
-        if self._stimulipath.exists():
-            self._stimuli = Stimuli(self._stimulipath)
-        else:
-            self._stimuli = None
-
         self._amuapath = self._filteredpath / self._AMUANAME
         self._lplfppath = self._filteredpath / self._LPLFPNAME
         self._bplfppath = self._filteredpath / self._BPLFPNAME
         self._esapath = self._filteredpath / self._ESANAME
-        self._figurepath = self._path / self._FIGUREDIRNAME
-        if not self._figurepath.exists():
-            self._figurepath.mkdir()
-
-
-    @property
-    def figurepath(self):
-        return self._figurepath
 
     @property
     def hasamua(self):
@@ -490,12 +490,6 @@ class RecordingSL2020(Recording):
     def stimuli(self):
         return self._stimuli
 
-    @property
-    def stimulustable(self):
-        if self.hasstimuli:
-            return self._stimuli.stimulustable
-        else:
-            return None
 
     def __str__(self):
         return f"<Recording: {self.path}>"
@@ -504,7 +498,7 @@ class RecordingSL2020(Recording):
 
     @contextmanager
     def open_raw(self):
-        with mcsh5.open_recording(self._rawpath) as (raw, bitsnd):
+        with mcsh5.open_nn8x8rev5recording(self._rawpath) as (raw, bitsnd):
             yield raw
 
     def load_raw(self):
@@ -514,7 +508,7 @@ class RecordingSL2020(Recording):
 
     @contextmanager
     def open_bitsnd(self):
-        with mcsh5.open_recording(self._rawpath) as (raw, bitsnd):
+        with mcsh5.open_nn8x8rev5recording(self._rawpath) as (raw, bitsnd):
             yield bitsnd
 
     def load_bitsnd(self):
