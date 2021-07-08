@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from . import mcsh5
 from efys.filtering import filtermne, create_bplfp, create_lplfp, create_amua, create_esa, create_esamne
-from efys.stimuli import Stimuli
+from efys.stimuli.auditory import AuditoryStimuli
 
 
 class BaseEfysDir:
@@ -137,7 +137,7 @@ class Experiment(BaseEfysDir):
                 print(f'Recording session {rs.name}')
             for r in rs:
                 if print_progress:
-                    print(f'\tRecording{r.name}')
+                    print(f'\tRecording {r.name}')
                 yield rs, r
 
 
@@ -188,7 +188,7 @@ class RecordingSession(BaseEfysDir):
             r =  recordingclasses[efysclass](self.path / key)
         else:
 
-            r = Recording(self.path / key)
+            r = RecordingAuditory(self.path / key)
         return r
 
     def __iter__(self):
@@ -208,6 +208,7 @@ class RecordingSession(BaseEfysDir):
                 warnings.warn(f"{rname} is a directory in {self._path} but "
                               f"holds no valid recording data. Caught exception "
                               f"{str(e)}", ResourceWarning)
+                raise e
         return validrnames
 
     def _update_recordingclass(self, classname):
@@ -221,14 +222,11 @@ class RecordingSession(BaseEfysDir):
                 d[name] = self[name]
         return d
 
-    def create_lplfp(self, freq=200., overwrite=False):
-        for r in self:
-            r.create_lplfp(freq=freq, reportprogress=False, overwrite=overwrite)
 
-class Recording(BaseEfysDir):
+# TODO split AuditoryRecording and Recording for general
+class RecordingAuditory(BaseEfysDir):
 
     _filteredrecordingdirname = 'filtered'
-    _rawrelpath = None # to be defined by sublass, relative to `path`, can be done in init
     _stimulidirname = 'stimuli'
     _stimulustablename = 'stimulustable.csv'
     _figuredirname = 'figures'
@@ -247,6 +245,16 @@ class Recording(BaseEfysDir):
             self._stimulipath.mkdir()
         if not self._figurepath.exists():
             self._figurepath.mkdir()
+        self._hasstimuli = False
+        self._stimuli = None
+        if (self._stimulustablepath).exists():
+            try:
+                self._hasstimuli = True
+                self._stimuli = AuditoryStimuli(self._stimulipath)
+            except:
+                warnings.warn(f'stimulustable exists, but cannot init a AuditoriStimuli object')
+
+
 
     @property
     def figurepath(self):
@@ -268,8 +276,16 @@ class Recording(BaseEfysDir):
             return None
 
     @property
-    def rawpath(self):
-        return self.path / self._rawrelpath
+    def hasstimuli(self):
+        if self._stimuli is not None:
+            return True
+        else:
+            return False
+
+    @property
+    def stimuli(self):
+        return self._stimuli
+
 
     @property
     def filteredpath(self):
@@ -304,8 +320,11 @@ class Recording(BaseEfysDir):
     def _update_filteredsignals(self):
         for sname in sorted(self._filteredpath.glob('*')):
             path = self._filteredpath / sname
-            s = uts.opendarr(path, 'r')
-            self._filteredsignals[sname.name] = s
+            try:
+                s = uts.opendarr(path, 'r')
+                self._filteredsignals[sname.name] = s
+            except:
+                warnings.warn(f'{sname} has a directory, but cannot instantiate filtered signal')
 
     def _update_recordingclass(self, classname):
         if not classname in recordingclasses:
@@ -415,14 +434,19 @@ class Recording(BaseEfysDir):
         send2trash.send2trash(str(path))
 
 
-class RecordingPMM2015(Recording):
+class RecordingPMM2015(RecordingAuditory):
 
     _rawrelpath = 'recording.darr'
-    _bitsndpath = 'sound.darr'
+    _bitsndrelpath = 'sound.darr'
+
+    @property
+    def rawpath(self):
+        return self.path / self._rawrelpath
 
     @property
     def bitsndpath(self):
-        return self._bitsndpath
+        return self.path / self._bitsndrelpath
+
 
     # to be implemented by subclass
     @contextmanager
@@ -435,14 +459,14 @@ class RecordingPMM2015(Recording):
     # to be implemented by subclass
     @contextmanager
     def open_bitsnd(self):
-        yield None
+        yield uts.opendarr(self.bitsndpath)
 
     # to be implemented by subclass
     def load_bitsnd(self):
-        return None
+        return uts.opendarr(self.bitsndpath)
 
 
-class RecordingSL2020(Recording):
+class RecordingSL2020(RecordingAuditory):
 
     _LPLFPNAME = 'lplfp.darr'
     _BPLFPNAME = 'bplfp.darr'
@@ -451,7 +475,7 @@ class RecordingSL2020(Recording):
 
     def __init__(self, path):
 
-        Recording.__init__(self, path=path)
+        RecordingAuditory.__init__(self, path=path)
 
         h5files = [f for f in self._path.glob('*.h5')]
         if not len(h5files) == 1:
@@ -478,17 +502,6 @@ class RecordingSL2020(Recording):
     @property
     def hasesa(self):
         return self._esapath.exists()
-
-    @property
-    def hasstimuli(self):
-        if self._stimuli is not None:
-            return True
-        else:
-            return False
-
-    @property
-    def stimuli(self):
-        return self._stimuli
 
 
     def __str__(self):
@@ -604,7 +617,7 @@ class RecordingSL2020(Recording):
 
 
 recordingclasses = {
-    'Recording': Recording,
+    'Recording': RecordingAuditory,
     'RecordingPMM2015' : RecordingPMM2015,
     'RecordingSL2020': RecordingSL2020,
 }

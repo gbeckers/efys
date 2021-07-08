@@ -15,7 +15,8 @@ def normalize(a, axis=0):
     return a
 
 
-def find_calibmarks(snd, calibmark, searchduration=30., recordedasbit=False, bitthreshold=0.005):
+def find_calibmarks(snd, calibmark, searchduration=30., recordedasbit=False, bitthreshold=0.005,
+                    correct_ones=None):
     """Finds calibration stimuli at beginning and end of a longer sound (usually
     a recording of stimulus playback).
 
@@ -31,14 +32,14 @@ def find_calibmarks(snd, calibmark, searchduration=30., recordedasbit=False, bit
         Is snd a bitsnd (i.e. just 0 and 1 values)?
     bitthreshold: float
         Threshold above which sample values of calibmark will be considered 1. Rest is 0.
+    correct_ones: int | None
+        If not None, indicates how long a sequence of ones should be in order to set them to 0.
 
     Returns
     -------
     (starttime1, starttime2)
 
     """
-    taillen = 10
-    correctones = True
 
     if calibmark.fs != snd.fs:
         calibmark = uts.resample(calibmark, snd.fs / calibmark.fs)
@@ -48,31 +49,32 @@ def find_calibmarks(snd, calibmark, searchduration=30., recordedasbit=False, bit
     if recordedasbit:
         calibsamples = (calibsamples > bitthreshold).astype('float64')
     target1 = snd.samples[:searchnframes].astype('float64')
-    if correctones:
-        a = np.correlate(target1, np.ones(taillen), 'same')
-        target1[a == taillen] = 0.
-    plt.figure()
-    plt.plot(snd[:searchnframes].samplingtimes(),target1)
+    if correct_ones is not None:
+        a = np.correlate(target1, np.ones(correct_ones), 'same')
+        target1[a == correct_ones] = 0.
+    # plt.figure()
+    # plt.plot(snd[:searchnframes].samplingtimes(),target1)
     #target1 = normalize(target1)
     cc = np.correlate(target1, calibsamples, mode='valid')
     r1 = cc.argmax()
     # second calibmark
     target2 = snd.samples[-searchnframes:].astype('float64')
-    if correctones:
-        a = np.correlate(target2, np.ones(taillen), 'same')
-        target2[a == taillen] = 0.
-    plt.figure()
-    plt.plot(snd[-searchnframes:].samplingtimes(),target2)
-    #target2 = normalize(target2)
+    if correct_ones is not None:
+        a = np.correlate(target2, np.ones(correct_ones), 'same')
+        target2[a == correct_ones] = 0.
+    # plt.figure()
+    # plt.plot(snd[-searchnframes:].samplingtimes(),target2)
+    # #target2 = normalize(target2)
     cc = np.correlate(target2, calibsamples, mode='valid')
-    plt.figure()
-    plt.plot(cc)
+    # plt.figure()
+    # plt.plot(cc)
     r2 = cc.argmax() + snd.ntimesamples - searchnframes
     return snd.index_to_time((r1, r2))
 
 # TODO settings euts fig and plots
 def create_recordingstimulustable(recordedsnd, playbackstimulustable, playbacksnd, recordedasbit=False,
-                                  searchduration=30., bitthreshold=0.005, checkcalibmarks=False):
+                                  searchduration=30., bitthreshold=0.005, checkcalibmarks=False,
+                                  correct_ones=None):
     """Create a stimulus timing table of recording based on calibration sounds.
 
     Parameters
@@ -98,7 +100,7 @@ def create_recordingstimulustable(recordedsnd, playbackstimulustable, playbacksn
     calibmark = playbacksnd[st.iloc[0]['starttime']:st.iloc[0]['endtime']]
     t1,t2 = find_calibmarks(snd=recordedsnd, calibmark=calibmark,
                             searchduration=searchduration, recordedasbit=recordedasbit,
-                            bitthreshold=bitthreshold)
+                            bitthreshold=bitthreshold, correct_ones=correct_ones)
     factor = (t2 - t1) / (st.iloc[-1]['starttime'] - st.iloc[0]['starttime'])
     offset = t1
     st['starttime'] = offset + factor * st['starttime']
