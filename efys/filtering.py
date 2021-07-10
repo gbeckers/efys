@@ -146,10 +146,40 @@ def filtermne(s, outputpath, lfreq, hfreq, newfs=None, filterlength='auto', ltra
         return s
 
 def iter_firfilteruts(s, lfreq, hfreq, newfs=None, filterlength='auto',
-                    ltransbandwidth='auto',
-                   htransbandwidth='auto', phase='zero', firwindow='hamming', firdesign='firwin', dtype='float32',
-                   reportprogress=True, mode='same', chunksize=1024*75, threads=None,
-                   cachingthreshold=256.):
+                     ltransbandwidth='auto', htransbandwidth='auto', phase='zero',
+                     firwindow='hamming', firdesign='firwin', dtype='float32',
+                     reportprogress=True, mode='same', chunksize=1024*75, threads=None,
+                     cachingthreshold=256., axisorder=('time','channel')):
+    """Yields chunks of a filtered input signal.
+
+
+    Parameters
+    ----------
+    s
+    lfreq
+    hfreq
+    newfs
+    filterlength
+    ltransbandwidth
+    htransbandwidth
+    phase
+    firwindow
+    firdesign
+    dtype
+    reportprogress
+    mode
+    chunksize
+    threads
+    cachingthreshold
+    axisorder: sequence of strings
+        the order of the axes of the output chunks
+
+    Returns
+    -------
+        Signal chunk generator
+
+    """
+
     decf = _decfactor(newfs, s.fs)
     fdata, filtparams = create_filter(sfreq=s.fs, l_freq=lfreq, h_freq=hfreq, filter_length=filterlength,
                                       l_trans_bandwidth=ltransbandwidth, h_trans_bandwidth=htransbandwidth,
@@ -157,7 +187,7 @@ def iter_firfilteruts(s, lfreq, hfreq, newfs=None, filterlength='auto',
                                       fir_design=firdesign)
     filtparams['mode'] = mode
     icframes = uts.iter_convolve(s, kernel=fdata, mode=mode, dtype='float64', reportprogress=reportprogress,
-                                 threads=threads, chunksize=chunksize)
+                                 threads=threads, chunksize=chunksize, axisorder=axisorder)
     if decf is None:
         for chunk in icframes:
             chunk.attrs.update({'filterparameters': filtparams})
@@ -167,7 +197,7 @@ def iter_firfilteruts(s, lfreq, hfreq, newfs=None, filterlength='auto',
         filtparams['newfs'] = newfs
         filteredsize = s.mb * 8 / s.dtype.itemsize
         if filteredsize  >  cachingthreshold:
-            with uts.cachedarr(icframes, dtype=dtype, report=True) as s:
+            with uts.cachedarr(icframes, dtype=dtype, keep=False, report=True) as s:
                 for chunk in uts.iter_decimate(s, decf, chunksize=chunksize):
                     chunk.attrs.update({'filterparameters': filtparams})
                     yield chunk
@@ -203,13 +233,14 @@ def create_lplfp(s, path='lfplp', freq=200., htransbandwidth='auto', filterlengt
                  firwindow='hamming', phase='zero', firdesign='firwin', mode='same',
                  dtype='float32', newfs=1000., overwrite=False, reportprogress=True,
                  chunksize=1024*75, threads=None):
-    s =  iter_firfilteruts(s, lfreq=None, hfreq=freq, newfs=newfs,
+    s = iter_firfilteruts(s, lfreq=None, hfreq=freq, newfs=newfs,
                            filterlength=filterlength,
                            htransbandwidth=htransbandwidth, phase=phase,
                            firwindow=firwindow, firdesign=firdesign,
                            dtype=dtype, reportprogress=reportprogress,
-                           mode=mode, chunksize=chunksize, threads=threads)
-    return uts.savedarr(path, s, overwrite=overwrite)
+                           mode=mode, chunksize=chunksize, threads=threads,
+                           axisorder=('time','channel'))
+    return uts.savedarr(path, s, axisorder=['time','channel'], overwrite=overwrite)
 
 def create_bplfp(s, path='bplfp', freqs=(0.5, 200.), newfs=1000., ltransbandwidth='auto', htransbandwidth='auto',
                  filterlength='auto', firwindow='hamming', phase='zero', firdesign='firwin',
@@ -222,14 +253,16 @@ def create_bplfp(s, path='bplfp', freqs=(0.5, 200.), newfs=1000., ltransbandwidt
                                hfreq=freqs[1], newfs=newfs, filterlength=filterlength,
                             htransbandwidth=htransbandwidth, phase=phase, firwindow=firwindow, firdesign=firdesign,
                             dtype=dtype, reportprogress=reportprogress, mode=mode,
-                            chunksize=chunksize, threads=threads)
+                            chunksize=chunksize, threads=threads,
+                            axisorder=('time','channel'))
         lp = uts.savedarr(tempdirname, hp, overwrite=True)
         filterparams['lp'] = lp.attrs['filterparameters']
         bp = iter_firfilteruts(lp, lfreq=freqs[0], hfreq=None,
                            newfs=None, filterlength=filterlength,
                         ltransbandwidth=ltransbandwidth, phase=phase, firwindow=firwindow, firdesign=firdesign,
                         dtype=dtype, reportprogress=reportprogress, mode=mode,
-                        chunksize=chunksize, threads=threads)
+                        chunksize=chunksize, threads=threads,
+                               axisorder=('time','channel'))
         s = uts.savedarr(path, bp, overwrite=True)
         filterparams['hp'] = s.metadata['filterparameters']
         s.datadir.update_jsondict('metadata.json',{'filterparameters':
@@ -255,8 +288,8 @@ def create_amua(s, path='amua', freq=350., transbandwidth='auto',
                            ltransbandwidth=transbandwidth, phase=phase,
                            firwindow=firwindow, firdesign=firdesign,
                            dtype=dtype, reportprogress=reportprogress,
-                           mode=mode, chunksize=chunksize, threads=threads)
-
+                           mode=mode, chunksize=chunksize, threads=threads,
+                           axisorder=('time','channel'))
     with uts.cachedarr(hp, report=True, keep=False, dtype='float64', axisorder=['time','channel']) as sfilt:
         if reportprogress:
             if carfilter:
@@ -285,6 +318,56 @@ def create_amua(s, path='amua', freq=350., transbandwidth='auto',
         s.datadir.write_jsondict('filterparams.json',
                                  filterparams, overwrite=True)
         return s
+
+def create_esa(s, path='esa', hpfreq=350., lpfreq=30., hptransbandwidth='auto',
+               lptransbandwidth='auto', hpfilterlength='auto',
+               lpfilterlength='auto', firwindow='hamming', phase='zero',
+                firdesign='firwin', mode='same', newfs=1000., dtype=np.float32,
+                overwrite=False, reportprogress=True, threads=None,
+                chunksize=1024*75):
+
+    _check_pathexists(path=path, overwrite=overwrite)
+    decf = _decfactor(newfs, s.fs)
+    if reportprogress:
+        print('starting high-pass')
+        sys.stdout.flush()
+    hp = iter_firfilteruts(s, lfreq=hpfreq, hfreq=None,
+                           newfs=None, filterlength=hpfilterlength,
+                           ltransbandwidth=hptransbandwidth, phase=phase,
+                           firwindow=firwindow, firdesign=firdesign,
+                           dtype=dtype, reportprogress=reportprogress,
+                           mode=mode, chunksize=chunksize, threads=threads)
+    filterparams = {}
+    with uts.cachedarr(hp, report=True, keep=False, dtype='float64',
+                       axisorder=['time','channel']) as sfilt:
+        filterparams['hp'] = sfilt.metadata['filterparameters']
+        if reportprogress:
+            print(f'starting car filtering and taking absolute')
+        da = sfilt.samples.array
+        with da.open():
+            for i,j in da.iterindices(chunklen=chunksize):
+                chunk = da._memmap[i:j]
+                chunk -= np.mean(chunk, axis=1, keepdims=True)
+                da._memmap[i:j] = np.absolute(chunk)
+        lp = iter_firfilteruts(sfilt, lfreq=None, hfreq=lpfreq,
+                               newfs=newfs, filterlength=lpfilterlength,
+                               htransbandwidth=lptransbandwidth, phase=phase,
+                               firwindow=firwindow, firdesign=firdesign,
+                               dtype=dtype, reportprogress=reportprogress,
+                               mode=mode, chunksize=chunksize, threads=threads)
+        if reportprogress:
+            print('starting low-pass filtering, decimating and saving esa '
+                  'signal')
+            sys.stdout.flush()
+        s = uts.savedarr(path=path, s=lp, dtype=dtype,
+                         axisorder=['time','channel'], overwrite=True)
+        filterparams['lp'] = s.metadata['filterparameters']
+        s.datadir.update_jsondict('metadata.json',{'filterparameters':
+                                                   filterparams})
+        s.datadir.write_jsondict('filterparams.json',
+                                 filterparams, overwrite=True)
+        return s
+
 
 
 #TODO remove dask dependence, use uts
@@ -361,51 +444,3 @@ def create_esamne(s, outputpath, overwrite=False):
         return s
 
 
-def create_esa(s, path='esa', hpfreq=350., lpfreq=30., hptransbandwidth='auto',
-               lptransbandwidth='auto', hpfilterlength='auto',
-               lpfilterlength='auto', firwindow='hamming', phase='zero',
-                firdesign='firwin', mode='same', newfs=1000., dtype=np.float32,
-                overwrite=False, reportprogress=True, threads=None,
-                chunksize=1024*75):
-
-    _check_pathexists(path=path, overwrite=overwrite)
-    decf = _decfactor(newfs, s.fs)
-    if reportprogress:
-        print('starting high-pass')
-        sys.stdout.flush()
-    hp = iter_firfilteruts(s, lfreq=hpfreq, hfreq=None,
-                           newfs=None, filterlength=hpfilterlength,
-                           ltransbandwidth=hptransbandwidth, phase=phase,
-                           firwindow=firwindow, firdesign=firdesign,
-                           dtype=dtype, reportprogress=reportprogress,
-                           mode=mode, chunksize=chunksize, threads=threads)
-    filterparams = {}
-    with uts.cachedarr(hp, report=True, keep=False, dtype='float64',
-                       axisorder=['time','channel']) as sfilt:
-        filterparams['hp'] = sfilt.metadata['filterparameters']
-        if reportprogress:
-            print(f'starting car filtering and taking absolute')
-        da = sfilt.samples.array
-        with da.open():
-            for i,j in da.iterindices(chunklen=chunksize):
-                chunk = da._memmap[i:j]
-                chunk -= np.mean(chunk, axis=1, keepdims=True)
-                da._memmap[i:j] = np.absolute(chunk)
-        lp = iter_firfilteruts(sfilt, lfreq=None, hfreq=lpfreq,
-                               newfs=newfs, filterlength=lpfilterlength,
-                               htransbandwidth=lptransbandwidth, phase=phase,
-                               firwindow=firwindow, firdesign=firdesign,
-                               dtype=dtype, reportprogress=reportprogress,
-                               mode=mode, chunksize=chunksize, threads=threads)
-        if reportprogress:
-            print('starting low-pass filtering, decimating and saving esa '
-                  'signal')
-            sys.stdout.flush()
-        s = uts.savedarr(path=path, s=lp, dtype=dtype,
-                         axisorder=['time','channel'], overwrite=True)
-        filterparams['lp'] = s.metadata['filterparameters']
-        s.datadir.update_jsondict('metadata.json',{'filterparameters':
-                                                   filterparams})
-        s.datadir.write_jsondict('filterparams.json',
-                                 filterparams, overwrite=True)
-        return s

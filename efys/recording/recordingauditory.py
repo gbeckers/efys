@@ -120,7 +120,7 @@ class Experiment(BaseEfysDir):
                     d[rs.name][rname] = r
         return d
 
-    def iter_recordings(self, print_progress=True):
+    def iter_recordings(self, print_progress=False):
         """Iterates over recordings in recordinsessions in experiment
 
         Parameters
@@ -221,6 +221,7 @@ class RecordingSession(BaseEfysDir):
             if re.search(regexp, name) is not None:
                 d[name] = self[name]
         return d
+
 
 
 # TODO split AuditoryRecording and Recording for general
@@ -617,7 +618,7 @@ class RecordingSL2020(RecordingAuditory):
 
 
 recordingclasses = {
-    'Recording': RecordingAuditory,
+    'RecordingAuditory': RecordingAuditory,
     'RecordingPMM2015' : RecordingPMM2015,
     'RecordingSL2020': RecordingSL2020,
 }

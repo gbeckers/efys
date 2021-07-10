@@ -1,6 +1,7 @@
 from . import edf
 from . import audiocalibmarks
 from . import openbci
+from . import recording
 
 
 from ._version import get_versions
