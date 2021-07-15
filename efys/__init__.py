@@ -1,7 +1,8 @@
-from . import edf
-from . import audiocalibmarks
-from . import openbci
+
 from . import recording
+from . import analysis
+from . import stimuli
+from . import tests
 
 
 from ._version import get_versions
