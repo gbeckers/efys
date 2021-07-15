@@ -19,7 +19,7 @@ setuptools.setup(
     name='efys',
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
-    packages=['efys', 'efys.tests'],
+    packages=['efys', 'efys.tests', 'analysis', 'recording', 'stimuli'],
     url='https://github.com/gbeckers/efys',
     license='BSD-3',
     author='Gabriel J.L. Beckers',

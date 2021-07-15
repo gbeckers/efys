@@ -60,3 +60,21 @@ def responsestereotypy(signal, stimulustable, epochduration, preepochduration, n
         return np.max(np.array(cc), axis=0)
     else:
         return np.average(np.array(cc), axis=0, weights=weights)
+
+
+
+def z_score(a, b):
+    """Calculates z-score of responsiveness between samples of two variables.
+
+    Parameters a and b contain the two variables. If their dimension is larger
+    than 1, the z-scores are calculated over the first axis (0).
+
+    """
+
+    ma = np.nanmean(a, 0)
+    mb = np.nanmean(b, 0)
+    sda = np.nanstd(a, 0)
+    sdb = np.nanstd(b, 0)
+    covab = np.nanmean((a - ma[np.newaxis, ...]) * (b - mb[np.newaxis, ...]), 0)
+
+    return (ma - mb) / np.sqrt(sda ** 2 + sdb ** 2 - 2 * covab)
