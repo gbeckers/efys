@@ -71,6 +71,25 @@ def find_calibmarks(snd, calibmark, searchduration=30., recordedasbit=False, bit
     r2 = cc.argmax() + snd.ntimesamples - searchnframes
     return snd.index_to_time((r1, r2))
 
+
+def convert_stimulustable(playbackstimulustable, starttimefirst, starttimelast, newfs):
+    """Convert playback stimulus table in a recording stimulus table, if you know the
+    recording starttimes of the first and the last sound in the table.
+
+    This can be used if there are no calibmarks to be automatically found, but you do
+    have an idea of where they are."""
+
+    st = playbackstimulustable.copy()
+    factor = (starttimelast - starttimefirst) / (st.iloc[-1]['starttime'] - st.iloc[0]['starttime'])
+    offset = starttimefirst
+    st['starttime'] = offset + factor * st['starttime']
+    st['endtime'] = offset + factor * st['endtime']
+    st['startframe'] = np.round(st['starttime'] * newfs).astype('int64')
+    st['endframe'] = np.round(st['endtime'] * newfs).astype('int64')
+    params = {'offset': offset, 'scalingfactor': factor}
+    return st, params
+
+
 # TODO settings euts fig and plots
 def create_recordingstimulustable(recordedsnd, playbackstimulustable, playbacksnd, recordedasbit=False,
                                   searchduration=30., bitthreshold=0.005, checkcalibmarks=False,
