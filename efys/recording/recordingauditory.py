@@ -560,7 +560,8 @@ class RecordingSL2020(RecordingAuditory):
 
 
     def stimulusspectrogram(self, starttime, endtime, nperseg=512, noverlap=256,
-                            dynrange=40, ax=None, ylim=(0, 8000)):
+                            dynrange=40, ax=None, ylim=(0, 8000), labels=True,
+                            kHz=True, title=None):
         """Creates spectrogram of *reconstructed* stimulation sound
 
         Reconstructed means that it is based on the playback stimuli (not
@@ -596,24 +597,35 @@ class RecordingSL2020(RecordingAuditory):
         maxdb = 10 * np.log10(Sxx).max()
         if ax is None:
             ax = plt.gca(frameon=False)
+        fmin = f[0]
+        fmax = f[-1]
+        if kHz:
+            fmax /= 1000
+            fmin /= 1000
+            ylabel = 'Frequency (kHz)'
+        else:
+            ylabel = 'Frequency (Hz)'
         ax.imshow(10 * np.log10(Sxx), origin='lower', cmap='gray_r',
-                   extent=(t[0] + starttime, t[-1] + starttime, f[0], f[-1]), aspect='auto',
+                   extent=(t[0] + starttime, t[-1] + starttime, fmin, fmax), aspect='auto',
                    clim=(maxdb - dynrange, maxdb))
         _ = plt.ylim(ylim)
-        _ = plt.ylabel('Frequency (Hz)')
-        _ = plt.xlabel('Time (s)')
-        _ = plt.title('Reconstructed sound of stimulus playback')
+        _ = plt.ylabel(ylabel)
 
-        st = self.stimulustable
-        stimuli = st[(st['starttime'] > starttime) & (st['endtime'] < endtime)]
-        color = '#ff5500'
-        for i, d in stimuli.iterrows():
-            midtime = (d['endtime'] + d['starttime']) / 2.
-            label = d['snd']
-            plt.text(midtime, ylim[1] - (ylim[1] - ylim[0]) / 100, label, ha='center', va='top',
-                     color=color, fontsize='large', fontweight='bold')
-            plt.plot((d['starttime'], d['starttime']), ylim, color=color, lw=0.5)
-            plt.plot((d['endtime'], d['endtime']), ylim, color=color, lw=0.5)
+        _ = plt.xlabel('Time (s)')
+        if title is not None:
+            _ = plt.title(title)
+
+        if labels:
+            st = self.stimulustable
+            stimuli = st[(st['starttime'] > starttime) & (st['endtime'] < endtime)]
+            color = '#ff5500'
+            for i, d in stimuli.iterrows():
+                midtime = (d['endtime'] + d['starttime']) / 2.
+                label = d['snd']
+                plt.text(midtime, ylim[1] - (ylim[1] - ylim[0]) / 100, label, ha='center', va='top',
+                         color=color, fontsize='large', fontweight='bold')
+                plt.plot((d['starttime'], d['starttime']), ylim, color=color, lw=0.5)
+                plt.plot((d['endtime'], d['endtime']), ylim, color=color, lw=0.5)
         return ax, f, t, Sxx
 
 

@@ -327,7 +327,6 @@ def create_esa(s, path='esa', hpfreq=350., lpfreq=30., hptransbandwidth='auto',
                 chunksize=1024*75):
 
     _check_pathexists(path=path, overwrite=overwrite)
-    decf = _decfactor(newfs, s.fs)
     if reportprogress:
         print('starting high-pass')
         sys.stdout.flush()

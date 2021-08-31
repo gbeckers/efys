@@ -70,7 +70,8 @@ def z_score(a, b):
     than 1, the z-scores are calculated over the first axis (0).
 
     """
-
+    a = np.asarray(a, dtype='float64')
+    b = np.asarray(b, dtype='float64')
     ma = np.nanmean(a, 0)
     mb = np.nanmean(b, 0)
     sda = np.nanstd(a, 0)
