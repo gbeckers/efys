@@ -72,14 +72,16 @@ def find_calibmarks(snd, calibmark, searchduration=30., recordedasbit=False, bit
     return snd.index_to_time((r1, r2))
 
 
-def convert_stimulustable(playbackstimulustable, starttimefirst, starttimelast, newfs):
-    """Convert playback stimulus table in a recording stimulus table, if you know the
-    recording starttimes of the first and the last sound in the table.
+def convert_stimulustable(audiostimulustable, starttimefirst, starttimelast, newfs):
+    """Convert audio stimulus table in a recording event table, if you know the
+    recording starttimes of the first and the last sound event in the table.
 
     This can be used if there are no calibmarks to be automatically found, but you do
-    have an idea of where they are."""
+    have an idea of where they are.
 
-    st = playbackstimulustable.copy()
+    """
+
+    st = audiostimulustable.copy()
     factor = (starttimelast - starttimefirst) / (st.iloc[-1]['starttime'] - st.iloc[0]['starttime'])
     offset = starttimefirst
     st['starttime'] = offset + factor * st['starttime']
@@ -91,7 +93,7 @@ def convert_stimulustable(playbackstimulustable, starttimefirst, starttimelast, 
 
 
 # TODO settings euts fig and plots
-def create_recordingstimulustable(recordedsnd, playbackstimulustable, playbacksnd, recordedasbit=False,
+def create_recordingstimulustable(recordedsnd, audiostimulustable, snd, recordedasbit=False,
                                   searchduration=30., bitthreshold=0.005, checkcalibmarks=False,
                                   correct_ones=None):
     """Create a stimulus timing table of recording based on calibration sounds.
@@ -99,8 +101,8 @@ def create_recordingstimulustable(recordedsnd, playbackstimulustable, playbacksn
     Parameters
     ----------
     recordedsnd
-    playbackstimulustable
-    playbacksnd
+    audiostimulustable
+    snd
     recordedasbit
     searchduration
     bitthreshold
@@ -111,12 +113,12 @@ def create_recordingstimulustable(recordedsnd, playbackstimulustable, playbacksn
     st, params, (fig1, fig2)
     """
 
-    st = playbackstimulustable.copy()
+    st = audiostimulustable.copy()
     for i, pos in zip((0,-1),('first', 'last')):
         if not st.iloc[i]['snd'] in ('calibmark'):
             raise ValueError(f'{pos} row of playback stimulus table does not '
                              f'contain calibmark')
-    calibmark = playbacksnd[st.iloc[0]['starttime']:st.iloc[0]['endtime']]
+    calibmark = snd[st.iloc[0]['starttime']:st.iloc[0]['endtime']]
     t1,t2 = find_calibmarks(snd=recordedsnd, calibmark=calibmark,
                             searchduration=searchduration, recordedasbit=recordedasbit,
                             bitthreshold=bitthreshold, correct_ones=correct_ones)
@@ -160,8 +162,8 @@ def create_recordingstimulustable(recordedsnd, playbackstimulustable, playbacksn
     return st, params, (fig1, fig2)
 
 
-def create_recordingstimulusinfobiosemi(edfpath, playbackstimulustablepath, playbackwavpath, outputpath=None,
-                                  searchduration=30., bitthreshold=0.005):
+def create_recordingstimulusinfobiosemi(edfpath, audiostimulustablepath, audiowavpath, outputpath=None,
+                                        searchduration=30., bitthreshold=0.005):
     """Creates information on sound stimulus occurrence in recording.
 
     The information is generated based on a trace of the audio playback, a provided stimulus table
@@ -170,9 +172,9 @@ def create_recordingstimulusinfobiosemi(edfpath, playbackstimulustablepath, play
     Parameters
     ----------
     edfpath: path
-    playbackstimulustablepath: path
+    audiostimulustablepath: path
       Path to csv file with platback stimulus info
-    playbackwavpath
+    audiowavpath
     outputpath
     searchduration
     bitthreshold
@@ -192,13 +194,13 @@ def create_recordingstimulusinfobiosemi(edfpath, playbackstimulustablepath, play
         outputpath = edfpath.with_name(f"{edfpath.with_suffix('').name}_stimulusinfo")
     else:
         outputpath = Path(outputpath)
-    pst = pd.read_csv(playbackstimulustablepath)
+    pst = pd.read_csv(audiostimulustablepath)
     bitsnd = edf.load_edfasumcts(str(edfpath), channels=[audiochannel], dtype='int16')[:,0]
-    fs, data = wavfile.read(filename=str(playbackwavpath))
+    fs, data = wavfile.read(filename=str(audiowavpath))
     playbacksnd = uts.UniformTimeSeries(samples=data, fs=float(fs))
     st, params, (fig1, fig2) = create_recordingstimulustable(recordedsnd=bitsnd,
-                                                             playbackstimulustable=pst,
-                                                             playbacksnd=playbacksnd,
+                                                             audiostimulustable=pst,
+                                                             snd=playbacksnd,
                                                              recordedasbit=recordedasbit,
                                                              searchduration=searchduration,
                                                              bitthreshold=bitthreshold,
@@ -217,8 +219,8 @@ def create_recordingstimulusinfobiosemi(edfpath, playbackstimulustablepath, play
     fig2.savefig(dd.path / 'snd_epochs.png', dpi=300)
     return st
 
-def create_recordingstimulusinfoopenbci(datafilepath, playbackstimulustablepath,
-                                        playbackwavpath, outputpath=None, searchduration=30.,
+def create_recordingstimulusinfoopenbci(datafilepath, audiostimulustablepath,
+                                        audiowavpath, outputpath=None, searchduration=30.,
                                         bitthreshold=0.005):
     """Creates information on sound stimulus occurrence in recording.
 
@@ -228,9 +230,9 @@ def create_recordingstimulusinfoopenbci(datafilepath, playbackstimulustablepath,
     Parameters
     ----------
     edfpath: path
-    playbackstimulustablepath: path
+    audiostimulustablepath: path
       Path to csv file with platback stimulus info
-    playbackwavpath
+    audiowavpath
     outputpath
     searchduration
     bitthreshold
@@ -258,13 +260,13 @@ def create_recordingstimulusinfoopenbci(datafilepath, playbackstimulustablepath,
         outputpath = datafilepath.with_name(f"{datafilepath.with_suffix('').name}_stimulusinfo")
     else:
         outputpath = Path(outputpath)
-    pst = pd.read_csv(playbackstimulustablepath)
+    pst = pd.read_csv(audiostimulustablepath)
 
-    fs, data = wavfile.read(filename=str(playbackwavpath))
+    fs, data = wavfile.read(filename=str(audiowavpath))
     playbacksnd = uts.UniformTimeSeries(samples=data, fs=float(fs))
     st, params, (fig1, fig2) = create_recordingstimulustable(recordedsnd=bitsnd,
-                                                             playbackstimulustable=pst,
-                                                             playbacksnd=playbacksnd,
+                                                             audiostimulustable=pst,
+                                                             snd=playbacksnd,
                                                              recordedasbit=recordedasbit,
                                                              searchduration=searchduration,
                                                              bitthreshold=bitthreshold,

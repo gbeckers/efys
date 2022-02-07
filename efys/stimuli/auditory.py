@@ -87,12 +87,12 @@ class AuditoryStimuli:
         frames, fs = self.read_playbackwav()
         playbacksnd = uts.UniformTimeSeries(frames, fs=float(fs))
         st, params, (fig1, fig2) = create_recordingstimulustable(recordedsnd=recordedsnd,
-                                           playbackstimulustable=playbackstimulustable,
-                                           playbacksnd=playbacksnd,
-                                           recordedasbit=True,
-                                           searchduration=searchduration, bitthreshold=0.005,
-                                           checkcalibmarks=checkcalibmarks,
-                                           correct_ones=correctones)
+                                                                 audiostimulustable=playbackstimulustable,
+                                                                 snd=playbacksnd,
+                                                                 recordedasbit=True,
+                                                                 searchduration=searchduration, bitthreshold=0.005,
+                                                                 checkcalibmarks=checkcalibmarks,
+                                                                 correct_ones=correctones)
 
         if self._stimulustablepath.exists():
             newname = f'{self._stimulustablepath.with_suffix("").name}_old_{datetimestring()}.csv'
