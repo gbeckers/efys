@@ -12,7 +12,7 @@ def find_calibmarks(snd, snd_fs, calibmark, calibmark_fs, searchduration=30.,
                     recordedasbit=False, bitthreshold=0.005,
                     correct_ones=None):
     """Finds calibration stimuli at beginning and end of a longer sound (usually
-    a recording of stimulus playback).
+    a recordingdata of stimulus playback).
 
     Parameters
     ----------
@@ -59,8 +59,8 @@ def find_calibmarks(snd, snd_fs, calibmark, calibmark_fs, searchduration=30.,
 
 
 def convert_stimulustable(audiostimulustable, starttimefirst, starttimelast, newfs):
-    """Convert audio stimulus table in a recording event table, if you know the
-    recording starttimes of the first and the last sound event in the table.
+    """Convert audio stimulus table in a recordingdata event table, if you know the
+    recordingdata starttimes of the first and the last sound event in the table.
 
     This can be used if there are no calibmarks to be automatically found, but you do
     have an idea of where they are.
@@ -83,7 +83,7 @@ def create_recordingeventtable(recsnd, recsnd_fs, calibmark, calibmark_fs,
                                audiostimulustable, recordedasbit=False,
                                searchduration=30., bitthreshold=0.005,
                                checkcalibmarks=False, correct_ones=None):
-    """Create a stimulus timing table of recording based on calibration sounds.
+    """Create a stimulus timing table of recordingdata based on calibration sounds.
 
     Parameters
     ----------
@@ -167,7 +167,7 @@ def create_recordingeventtable(recsnd, recsnd_fs, calibmark, calibmark_fs,
 
 def create_recordingeventsinfobiosemi(edfpath, audiostimulustablepath, audiowavpath, outputpath=None,
                                       searchduration=30., bitthreshold=0.005):
-    """Creates information on sound stimulus occurrence in recording.
+    """Creates information on sound stimulus occurrence in recordingdata.
 
     The information is generated based on a trace of the audio playback, a provided stimulus table
     and an playback audio file. The information is saved in several files in `outputpath`.
@@ -184,7 +184,7 @@ def create_recordingeventsinfobiosemi(edfpath, audiostimulustablepath, audiowavp
 
     Returns
     -------
-    Pandas DataFrame recording stimulus table
+    Pandas DataFrame recordingdata stimulus table
 
     """
     overwrite = True
@@ -234,7 +234,7 @@ def create_recordingeventsinfoopenbci(datafilepath, audiostimulustablepath,
     from . import openbci
     import uts
 
-    """Creates information on sound stimulus occurrence in recording.
+    """Creates information on sound stimulus occurrence in recordingdata.
 
     The information is generated based on a trace of the audio playback, a provided stimulus table
     and an playback audio file. The information is saved in several files in `outputpath`.
@@ -251,7 +251,7 @@ def create_recordingeventsinfoopenbci(datafilepath, audiostimulustablepath,
 
     Returns
     -------
-    Pandas DataFrame recording stimulus table
+    Pandas DataFrame recordingdata stimulus table
 
     """
     overwrite = True

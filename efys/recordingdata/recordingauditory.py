@@ -1,3 +1,7 @@
+"""Classes for recordings of auditory electrophysiology recordings.
+
+"""
+
 import warnings
 import re
 import numpy as np
@@ -11,11 +15,18 @@ import efys
 from contextlib import contextmanager
 from pathlib import Path
 from . import mcsh5
-from efys.filtering import filtermne, create_bplfp, create_lplfp, create_amua, create_esa, create_esamne
+from efys.filtering import create_bplfp, create_lplfp, create_amua, create_esa
 from efys.stimuli.auditory import AuditoryStimuli
 
 
 class BaseEfysDir:
+    """Base class for an efys recordingdata directory structure.
+
+    It is essentially a directory with a json info file in it,
+    containing information on the efys class the directory
+    corresponds to, and the version of efys.
+
+    """
 
     _infofilename = 'efys.json'
 
@@ -53,12 +64,9 @@ class BaseEfysDir:
                                      d=d, overwrite=True)
 
 
-
-
-
 class Experiment(BaseEfysDir):
 
-    """A directory that has subdirectories that represent recording sessions
+    """A directory that has subdirectories that represent recordingdata sessions
     from one experiment.
 
     Parameters
@@ -101,7 +109,7 @@ class Experiment(BaseEfysDir):
                 validrnames.append(rname)
             except Exception as e:
                 warnings.warn(f"{rname} is a directory in {self._path} but "
-                              f"holds no valid recording data. Caught exception "
+                              f"holds no valid recordingdata data. Caught exception "
                               f"{str(e)}", ResourceWarning)
         return validrnames
 
@@ -129,7 +137,7 @@ class Experiment(BaseEfysDir):
 
         Returns
         -------
-        iterates over (recordingsession, recording) tuples
+        iterates over (recordingsession, recordingdata) tuples
 
         """
         for rs in self:
@@ -157,7 +165,7 @@ class Experiment(BaseEfysDir):
 
 class RecordingSession(BaseEfysDir):
     """A directory that has subdirectories that represent recordings from one
-    recording session.
+    recordingdata session.
 
     Parameters
     ----------
@@ -206,7 +214,7 @@ class RecordingSession(BaseEfysDir):
                 validrnames.append(rname)
             except Exception as e:
                 warnings.warn(f"{rname} is a directory in {self._path} but "
-                              f"holds no valid recording data. Caught exception "
+                              f"holds no valid recordingdata data. Caught exception "
                               f"{str(e)}", ResourceWarning)
                 raise e
         return validrnames
@@ -303,6 +311,7 @@ class RecordingAuditory(BaseEfysDir):
     # to be implemented by subclass
     @contextmanager
     def open_raw(self):
+        # yields a uts MultiChannelUniformTimeSeries in subclass
         yield None
 
     # to be implemented by subclass
@@ -437,7 +446,7 @@ class RecordingAuditory(BaseEfysDir):
 
 class RecordingPMM2015(RecordingAuditory):
 
-    _rawrelpath = 'recording.darr'
+    _rawrelpath = 'recordingdata.darr'
     _bitsndrelpath = 'sound.darr'
 
     @property
@@ -566,7 +575,7 @@ class RecordingSL2020(RecordingAuditory):
 
         Reconstructed means that it is based on the playback stimuli (not
         recorded stimuli) and the timing of those stimuli as obtained from
-        the recording stimulus table.
+        the recordingdata stimulus table.
 
         Parameters
         ----------
