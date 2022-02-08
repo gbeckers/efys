@@ -7,7 +7,7 @@ import uts, utsviz
 import matplotlib.pyplot as plt
 from darr import DataDir
 from efys.utils import datetimestring
-from efys.audiocalibmarks import create_recordingstimulustable
+from efys.audiocalibmarks import create_recordingeventtable
 
 
 class AuditoryStimuli:
@@ -86,13 +86,13 @@ class AuditoryStimuli:
         playbackstimulustable = self.playbackstimulustable
         frames, fs = self.read_playbackwav()
         playbacksnd = uts.UniformTimeSeries(frames, fs=float(fs))
-        st, params, (fig1, fig2) = create_recordingstimulustable(recordedsnd=recordedsnd,
-                                                                 audiostimulustable=playbackstimulustable,
-                                                                 snd=playbacksnd,
-                                                                 recordedasbit=True,
-                                                                 searchduration=searchduration, bitthreshold=0.005,
-                                                                 checkcalibmarks=checkcalibmarks,
-                                                                 correct_ones=correctones)
+        st, params, (fig1, fig2) = create_recordingeventtable(recsnd=recordedsnd,
+                                                              audiostimulustable=playbackstimulustable,
+                                                              calibmark=playbacksnd,
+                                                              recordedasbit=True,
+                                                              searchduration=searchduration, bitthreshold=0.005,
+                                                              checkcalibmarks=checkcalibmarks,
+                                                              correct_ones=correctones)
 
         if self._stimulustablepath.exists():
             newname = f'{self._stimulustablepath.with_suffix("").name}_old_{datetimestring()}.csv'

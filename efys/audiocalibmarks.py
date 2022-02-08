@@ -5,7 +5,6 @@ from scipy.io import wavfile
 from scipy.signal import resample
 from darr import DataDir, create_datadir
 from pathlib import Path
-import time
 
 from . import edf
 
@@ -57,12 +56,8 @@ def find_calibmarks(snd, snd_fs, calibmark, calibmark_fs, searchduration=30.,
     # plt.figure()
     # plt.plot(snd[:searchnframes].samplingtimes(),target1)
     #target1 = normalize(target1)
-    plt.plot(calibmark)
-    print(target1.shape,target1.dtype,calibmark.shape, calibmark.dtype)
-    t1 = time.time()
     cc = np.correlate(target1, calibmark, mode='valid')
     r1 = cc.argmax()
-    print(time.time()-t1)
     # second calibmark
     target2 = snd[-searchnframes:].astype('float64')
     if correct_ones is not None:
@@ -98,19 +93,19 @@ def convert_stimulustable(audiostimulustable, starttimefirst, starttimelast, new
     return st, params
 
 
-# TODO settings euts fig and plots
-def create_recordingstimulustable(recordedsnd, recsnd_fs, snd, snd_fs,
-                                  audiostimulustable, recordedasbit=False,
-                                  searchduration=30., bitthreshold=0.005,
-                                  checkcalibmarks=False, correct_ones=None):
+# TODO refactor code to make it more readable
+def create_recordingeventtable(recsnd, recsnd_fs, calibmark, calibmark_fs,
+                               audiostimulustable, recordedasbit=False,
+                               searchduration=30., bitthreshold=0.005,
+                               checkcalibmarks=False, correct_ones=None):
     """Create a stimulus timing table of recording based on calibration sounds.
 
     Parameters
     ----------
-    recordedsnd
+    recsnd
     recsnd_fs
-    snd
-    snd_fs
+    calibmark
+    calibmark_fs
     audiostimulustable
     recordedasbit
     searchduration
@@ -127,11 +122,11 @@ def create_recordingstimulustable(recordedsnd, recsnd_fs, snd, snd_fs,
         if not st.iloc[i]['snd'] in ('calibmark'):
             raise ValueError(f'{pos} row of playback stimulus table does not '
                              f'contain calibmark')
-    startframe = int(round(st.iloc[0]['starttime'] * snd_fs))
-    endframe = int(round(st.iloc[0]['endtime'] * snd_fs))
-    calibmark = snd[startframe:endframe]
-    t1,t2 = find_calibmarks(snd=recordedsnd, snd_fs=recsnd_fs, calibmark=calibmark,
-                            calibmark_fs=snd_fs,
+    startframe = int(round(st.iloc[0]['starttime'] * calibmark_fs))
+    endframe = int(round(st.iloc[0]['endtime'] * calibmark_fs))
+    calibmark = calibmark[startframe:endframe]
+    t1,t2 = find_calibmarks(snd=recsnd, snd_fs=recsnd_fs, calibmark=calibmark,
+                            calibmark_fs=calibmark_fs,
                             searchduration=searchduration,
                             recordedasbit=recordedasbit,
                             bitthreshold=bitthreshold, correct_ones=correct_ones)
@@ -146,41 +141,47 @@ def create_recordingstimulustable(recordedsnd, recsnd_fs, snd, snd_fs,
     if checkcalibmarks:
         cmdur = st.iloc[0]['endtime'] - st.iloc[0]['starttime']
         margin = int(round(cmdur*0.05*recsnd_fs))
-        margin = min(margin, len(recordedsnd)-st.iloc[-1]['endframe'])
+        margin = min(margin, len(recsnd) - st.iloc[-1]['endframe'])
         detaildur = cmdur / 5
         detaillen = int(round(detaildur*recsnd_fs))
         detailmargin = detaillen // 10
-        c1 = recordedsnd[st.iloc[0]['startframe'] - margin:st.iloc[0]['endframe'] + margin]
-        c2 = recordedsnd[st.iloc[-1]['startframe'] - margin:st.iloc[-1]['endframe'] + margin]
-        c1sel = recordedsnd[st.iloc[0]['startframe'] - detailmargin:st.iloc[0]['startframe'] + detaillen]
-        c2sel = recordedsnd[st.iloc[-1]['startframe'] - detailmargin:st.iloc[-1]['startframe'] + detaillen]
+        c1 = recsnd[st.iloc[0]['startframe'] - margin:st.iloc[0]['endframe'] + margin]
+        c2 = recsnd[st.iloc[-1]['startframe'] - margin:st.iloc[-1]['endframe'] + margin]
+        c1sel = recsnd[st.iloc[0]['startframe'] - detailmargin:st.iloc[0]['startframe'] + detaillen]
+        c2sel = recsnd[st.iloc[-1]['startframe'] - detailmargin:st.iloc[-1]['startframe'] + detaillen]
         fig1 = plt.figure(figsize=(14,6))
         plt.subplot(4, 1, 1)
-        c1samplingtimes = st.iloc[0]['starttime'] - margin + np.arange(len(c1), dtype='float64') / recsnd_fs
+        c1samplingtimes = st.iloc[0]['starttime'] - margin/recsnd_fs + np.arange(len(c1), dtype='float64') / recsnd_fs
         plt.plot(c1samplingtimes, c1)
         plt.title("Calibmarks")
         plt.subplot(4, 1, 2)
-        c1selsamplingtimes = st.iloc[0]['starttime'] - detailmargin + np.arange(len(c1sel), dtype='float64') / recsnd_fs
+        c1selsamplingtimes = st.iloc[0]['starttime'] - detailmargin/recsnd_fs + np.arange(len(c1sel), dtype='float64') / recsnd_fs
         plt.plot(c1selsamplingtimes, c1sel)
         plt.subplot(4, 1, 3)
-        c2samplingtimes = st.iloc[-1]['starttime'] -margin + np.arange(len(c2), dtype='float64') / recsnd_fs
+        c2samplingtimes = st.iloc[-1]['starttime'] -margin/recsnd_fs + np.arange(len(c2), dtype='float64') / recsnd_fs
         plt.plot(c2samplingtimes, c2)
         plt.subplot(4, 1, 4)
-        c2selsamplingtimes = st.iloc[-2]['starttime'] - detailmargin + np.arange(len(c2sel), dtype='float64') / recsnd_fs
+        c2selsamplingtimes = st.iloc[-2]['starttime'] - detailmargin/recsnd_fs + np.arange(len(c2sel), dtype='float64') / recsnd_fs
         plt.plot(c2selsamplingtimes, c2sel)
         plt.xlabel('Recording time (s)')
-        # euts = recordedsnd.get_epochs(duration=0.3, starttimes=st['starttime']-0.1, origintime=0.1)
+        duration = 0.2
+        preduration = 0.1
+        nframes = int((round((duration + preduration) * recsnd_fs)))
+        preframes = int(round(preduration*recsnd_fs))
+        euts = np.empty((len(st), nframes), 'float64')
+        for (row, startframe) in enumerate(st['startframe']):
+            euts[row,:] = recsnd[startframe-preframes:startframe-preframes+nframes]
         fig2 = plt.figure(figsize=(14, 14))
-        # plt.imshow(euts.samples[:], cmap='hot', interpolation='nearest',
-        #            extent=[-0.1, 0.2, 0, len(st)], aspect='auto')
-        # plt.xlabel('Time re event (s)')
-        # plt.ylabel('Events')
-        # plt.title('Stimulus alignment')
+        plt.imshow(euts, cmap='hot', interpolation='nearest',
+                   extent=[-preduration, duration, 0, len(st)], aspect='auto')
+        plt.xlabel('Time re event (s)')
+        plt.ylabel('Events')
+        plt.title('Stimulus alignment')
     return st, params, (fig1, fig2)
 
 
-def create_recordingstimulusinfobiosemi(edfpath, audiostimulustablepath, audiowavpath, outputpath=None,
-                                        searchduration=30., bitthreshold=0.005):
+def create_recordingeventsinfobiosemi(edfpath, audiostimulustablepath, audiowavpath, outputpath=None,
+                                      searchduration=30., bitthreshold=0.005):
     """Creates information on sound stimulus occurrence in recording.
 
     The information is generated based on a trace of the audio playback, a provided stimulus table
@@ -218,15 +219,15 @@ def create_recordingstimulusinfobiosemi(edfpath, audiostimulustablepath, audiowa
     bitsnd = ar[:,0]
     bitsnd_fs = metadata['fs']
     pbs_fs, playbacksnd = wavfile.read(filename=str(audiowavpath))
-    st, params, (fig1, fig2) = create_recordingstimulustable(recordedsnd=bitsnd,
-                                                             recsnd_fs=bitsnd_fs,
-                                                             snd=playbacksnd,
-                                                             snd_fs=pbs_fs,
-                                                             audiostimulustable=pst,
-                                                             recordedasbit=recordedasbit,
-                                                             searchduration=searchduration,
-                                                             bitthreshold=bitthreshold,
-                                                             checkcalibmarks=checkcalibmarks)
+    st, params, (fig1, fig2) = create_recordingeventtable(recsnd=bitsnd,
+                                                          recsnd_fs=bitsnd_fs,
+                                                          calibmark=playbacksnd,
+                                                          calibmark_fs=pbs_fs,
+                                                          audiostimulustable=pst,
+                                                          recordedasbit=recordedasbit,
+                                                          searchduration=searchduration,
+                                                          bitthreshold=bitthreshold,
+                                                          checkcalibmarks=checkcalibmarks)
     if not outputpath.exists():
         dd = create_datadir(outputpath)
     else:
@@ -242,10 +243,11 @@ def create_recordingstimulusinfobiosemi(edfpath, audiostimulustablepath, audiowa
     return st
 
 # TODO de-uts-ify
-def create_recordingstimulusinfoopenbci(datafilepath, audiostimulustablepath,
-                                        audiowavpath, outputpath=None, searchduration=30.,
-                                        bitthreshold=0.005):
+def create_recordingeventsinfoopenbci(datafilepath, audiostimulustablepath,
+                                      audiowavpath, outputpath=None, searchduration=30.,
+                                      bitthreshold=0.005):
     from . import openbci
+    import uts
 
     """Creates information on sound stimulus occurrence in recording.
 
@@ -289,13 +291,13 @@ def create_recordingstimulusinfoopenbci(datafilepath, audiostimulustablepath,
 
     fs, data = wavfile.read(filename=str(audiowavpath))
     playbacksnd = uts.UniformTimeSeries(samples=data, fs=float(fs))
-    st, params, (fig1, fig2) = create_recordingstimulustable(recordedsnd=bitsnd,
-                                                             audiostimulustable=pst,
-                                                             snd=playbacksnd,
-                                                             recordedasbit=recordedasbit,
-                                                             searchduration=searchduration,
-                                                             bitthreshold=bitthreshold,
-                                                             checkcalibmarks=checkcalibmarks)
+    st, params, (fig1, fig2) = create_recordingeventtable(recsnd=bitsnd,
+                                                          audiostimulustable=pst,
+                                                          calibmark=playbacksnd,
+                                                          recordedasbit=recordedasbit,
+                                                          searchduration=searchduration,
+                                                          bitthreshold=bitthreshold,
+                                                          checkcalibmarks=checkcalibmarks)
     if not outputpath.exists():
         dd = create_datadir(outputpath)
     else:
