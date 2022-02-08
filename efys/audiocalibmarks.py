@@ -56,6 +56,8 @@ def find_calibmarks(snd, snd_fs, calibmark, calibmark_fs, searchduration=30.,
     # plt.figure()
     # plt.plot(snd[:searchnframes].samplingtimes(),target1)
     #target1 = normalize(target1)
+    plt.plot(target1)
+    plt.plot(calibmark)
     cc = np.correlate(target1, calibmark, mode='valid')
     r1 = cc.argmax()
     # second calibmark
