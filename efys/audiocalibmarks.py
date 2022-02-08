@@ -56,7 +56,6 @@ def find_calibmarks(snd, snd_fs, calibmark, calibmark_fs, searchduration=30.,
     # plt.figure()
     # plt.plot(snd[:searchnframes].samplingtimes(),target1)
     #target1 = normalize(target1)
-    plt.plot(target1)
     plt.plot(calibmark)
     cc = np.correlate(target1, calibmark, mode='valid')
     r1 = cc.argmax()
@@ -124,8 +123,8 @@ def create_recordingstimulustable(recordedsnd, recsnd_fs, snd, snd_fs,
         if not st.iloc[i]['snd'] in ('calibmark'):
             raise ValueError(f'{pos} row of playback stimulus table does not '
                              f'contain calibmark')
-    startframe = int(round(st.iloc[0]['starttime'] * recsnd_fs))
-    endframe = int(round(st.iloc[0]['endtime'] * recsnd_fs))
+    startframe = int(round(st.iloc[0]['starttime'] * snd_fs))
+    endframe = int(round(st.iloc[0]['endtime'] * snd_fs))
     calibmark = snd[startframe:endframe]
     t1,t2 = find_calibmarks(snd=recordedsnd, snd_fs=recsnd_fs, calibmark=calibmark,
                             calibmark_fs=snd_fs,
