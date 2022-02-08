@@ -62,7 +62,7 @@ def find_calibmarks(snd, snd_fs, calibmark, calibmark_fs, searchduration=30.,
     t1 = time.time()
     cc = np.correlate(target1, calibmark, mode='valid')
     r1 = cc.argmax()
-    print(time.time-t1)
+    print(time.time()-t1)
     # second calibmark
     target2 = snd[-searchnframes:].astype('float64')
     if correct_ones is not None:
