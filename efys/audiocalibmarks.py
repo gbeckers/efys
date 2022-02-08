@@ -5,6 +5,7 @@ from scipy.io import wavfile
 from scipy.signal import resample
 from darr import DataDir, create_datadir
 from pathlib import Path
+import time
 
 from . import edf
 
@@ -57,8 +58,11 @@ def find_calibmarks(snd, snd_fs, calibmark, calibmark_fs, searchduration=30.,
     # plt.plot(snd[:searchnframes].samplingtimes(),target1)
     #target1 = normalize(target1)
     plt.plot(calibmark)
+    print(target1.shape,target1.dtype,calibmark.shape, calibmark.dtype)
+    t1 = time.time()
     cc = np.correlate(target1, calibmark, mode='valid')
     r1 = cc.argmax()
+    print(time.time-t1)
     # second calibmark
     target2 = snd[-searchnframes:].astype('float64')
     if correct_ones is not None:
