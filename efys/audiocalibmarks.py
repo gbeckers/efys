@@ -8,13 +8,6 @@ from pathlib import Path
 
 from . import edf
 
-
-def normalize(a, axis=0):
-    a -= a.mean(axis=axis)
-    a /= a.std()
-    return a
-
-
 def find_calibmarks(snd, snd_fs, calibmark, calibmark_fs, searchduration=30.,
                     recordedasbit=False, bitthreshold=0.005,
                     correct_ones=None):
@@ -53,22 +46,14 @@ def find_calibmarks(snd, snd_fs, calibmark, calibmark_fs, searchduration=30.,
     if correct_ones is not None:
         a = np.correlate(target1, np.ones(correct_ones), 'same')
         target1[a == correct_ones] = 0.
-    # plt.figure()
-    # plt.plot(snd[:searchnframes].samplingtimes(),target1)
-    #target1 = normalize(target1)
     cc = np.correlate(target1, calibmark, mode='valid')
     r1 = cc.argmax()
-    # second calibmark
     target2 = snd[-searchnframes:].astype('float64')
     if correct_ones is not None:
         a = np.correlate(target2, np.ones(correct_ones), 'same')
         target2[a == correct_ones] = 0.
-    # plt.figure()
-    # plt.plot(snd[-searchnframes:].samplingtimes(),target2)
-    # #target2 = normalize(target2)
+
     cc = np.correlate(target2, calibmark, mode='valid')
-    # plt.figure()
-    # plt.plot(cc)
     r2 = cc.argmax() + len(snd) - searchnframes
     return np.array((r1, r2))/snd_fs
 
