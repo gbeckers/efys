@@ -3,6 +3,7 @@ import pyedflib
 
 __all__ = ['read_edfinfo', 'load_edfasarray', 'load_edfasumcts']
 
+
 def read_edfinfo(filepath):
     with pyedflib.EdfReader(str(filepath)) as f:
         return {
