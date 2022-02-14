@@ -298,7 +298,7 @@ def create_amua(s, path='amua', freq=350., transbandwidth='auto',
                 s = ''
             print(f'starting{s} taking absolute')
         da = sfilt.samples.array
-        with da.open():
+        with da.open_array():
             for i,j in da.iterindices(chunklen=chunksize):
                 chunk = da._memmap[i:j]
                 if carfilter:
@@ -343,7 +343,7 @@ def create_esa(s, path='esa', hpfreq=350., lpfreq=30., hptransbandwidth='auto',
         if reportprogress:
             print(f'starting car filtering and taking absolute')
         da = sfilt.samples.array
-        with da.open():
+        with da.open_array():
             for i,j in da.iterindices(chunklen=chunksize):
                 chunk = da._memmap[i:j]
                 chunk -= np.mean(chunk, axis=1, keepdims=True)
