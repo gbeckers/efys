@@ -1,8 +1,12 @@
 darr
+h5py
 matplotlib
 mne
 numpy
 pandas
 pyedflib
+scipy
+send2trash
 soundfile
+tables
 uts

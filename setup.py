@@ -26,7 +26,8 @@ setuptools.setup(
     author_email='gabriel@gbeckers.nl',
     description='A library for working with electrofysiology data',
     python_requires='>=3.6',
-    install_requires=['numpy'],
+    install_requires=['darr','h5py','matplotlib','mne', 'numpy', 'pandas', 'pyedflib',
+                      'scipy', 'send2trash', 'soundfile', 'tables', 'uts'],
     data_files = [("", ["LICENSE"])],
     classifiers=[
         "Programming Language :: Python :: 3",

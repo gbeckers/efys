@@ -569,7 +569,7 @@ class RecordingSL2020(RecordingAuditory):
 
 
     def stimulusspectrogram(self, starttime, endtime, nperseg=512, noverlap=256,
-                            dynrange=40, ax=None, ylim=(0, 8000), labels=True,
+                            window='hann', dynrange=40, ax=None, ylim=(0, 8000), labels=True,
                             kHz=True, title=None):
         """Creates spectrogram of *reconstructed* stimulation sound
 
@@ -601,7 +601,7 @@ class RecordingSL2020(RecordingAuditory):
 
         snd, fs = self.stimuli.read_reconstructedsoundrecordingwav()
         f, t, Sxx = spectrogram(snd[int(starttime * fs):int(endtime * fs)], fs=fs,
-                                nperseg=nperseg, noverlap=noverlap, window='hanning')
+                                nperseg=nperseg, noverlap=noverlap, window=window)
         Sxx[Sxx == 0.0] = np.finfo('float64').eps
         maxdb = 10 * np.log10(Sxx).max()
         if ax is None:
