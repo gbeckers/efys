@@ -605,7 +605,8 @@ class RecordingSL2020(RecordingAuditory):
         Sxx[Sxx == 0.0] = np.finfo('float64').eps
         maxdb = 10 * np.log10(Sxx).max()
         if ax is None:
-            ax = plt.gca(frameon=False)
+            fig = plt.figure()
+            ax = fig.add_subplot()
         fmin = f[0]
         fmax = f[-1]
         if kHz:
