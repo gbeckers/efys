@@ -570,7 +570,7 @@ class RecordingSL2020(RecordingAuditory):
 
     def stimulusspectrogram(self, starttime, endtime, nperseg=512, noverlap=256,
                             window='hann', dynrange=40, ax=None, ylim=(0, 8000), labels=True,
-                            kHz=True, title=None):
+                            kHz=True, title=None, frameon=False):
         """Creates spectrogram of *reconstructed* stimulation sound
 
         Reconstructed means that it is based on the playback stimuli (not
@@ -606,7 +606,7 @@ class RecordingSL2020(RecordingAuditory):
         maxdb = 10 * np.log10(Sxx).max()
         if ax is None:
             fig = plt.figure()
-            ax = fig.add_subplot()
+            ax = fig.add_subplot(frameon=frameon)
         fmin = f[0]
         fmax = f[-1]
         if kHz:
